@@ -57,9 +57,10 @@ class HabitWidget : GlanceAppWidget() {
                 if (size >= 3) {
                     Box(
                         modifier = GlanceModifier
-                            .fillMaxWidth(0.85f)
-                            .height(84.dp)
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
                             .padding(top = 16.dp)
+                            .height(84.dp)
                             .background(ColorProvider(Color(0xFF2C2C2C)))
                             .cornerRadius(16.dp)
                     ) {}
@@ -67,9 +68,10 @@ class HabitWidget : GlanceAppWidget() {
                 if (size >= 2) {
                     Box(
                         modifier = GlanceModifier
-                            .fillMaxWidth(0.9f)
-                            .height(92.dp)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
                             .padding(top = 8.dp)
+                            .height(92.dp)
                             .background(ColorProvider(Color(0xFF383838)))
                             .cornerRadius(16.dp)
                     ) {}
@@ -84,7 +86,8 @@ class HabitWidget : GlanceAppWidget() {
 
                 Row(
                     modifier = GlanceModifier
-                        .fillMaxWidth(0.95f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
                         .height(100.dp)
                         .background(ColorProvider(Color(0xFF1E1E1E)))
                         .cornerRadius(16.dp)
@@ -98,7 +101,7 @@ class HabitWidget : GlanceAppWidget() {
                             .fillMaxHeight()
                             .background(ColorProvider(parsedColor))
                             .cornerRadius(3.dp)
-                    )
+                    ) {}
 
                     Spacer(modifier = GlanceModifier.width(10.dp))
 
@@ -209,7 +212,8 @@ class HabitWidget : GlanceAppWidget() {
                 // Empty State when all habits are complete
                 Column(
                     modifier = GlanceModifier
-                        .fillMaxWidth(0.95f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
                         .height(100.dp)
                         .background(ColorProvider(Color(0xFF1E1E1E)))
                         .cornerRadius(16.dp)

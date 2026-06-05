@@ -18,13 +18,13 @@ interface HabitDao {
     suspend fun insertHabit(habit: Habit): Long
 
     @Delete
-    suspend fun deleteHabit(habit: Habit)
+    suspend fun deleteHabit(habit: Habit): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCompletion(completion: HabitCompletion): Long
 
     @Query("DELETE FROM habit_completions WHERE habitId = :habitId AND date = :date")
-    suspend fun deleteCompletion(habitId: Long, date: String)
+    suspend fun deleteCompletion(habitId: Long, date: String): Int
 
     @Query("SELECT EXISTS(SELECT 1 FROM habit_completions WHERE habitId = :habitId AND date = :date)")
     suspend fun isCompletedToday(habitId: Long, date: String): Boolean

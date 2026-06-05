@@ -13,12 +13,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -228,7 +228,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous")
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous")
                     }
 
                     Text(
@@ -243,7 +243,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next")
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next")
                     }
                 }
             } else {
