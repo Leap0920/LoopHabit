@@ -5,9 +5,10 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [Habit::class, HabitCompletion::class], version = 1, exportSchema = false)
+@Database(entities = [User::class, Habit::class, HabitCompletion::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
+    abstract fun userDao(): UserDao
 
     companion object {
         @Volatile
@@ -18,7 +19,7 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "loophabit_database"
+                    "LoopHabit"
                 )
                 .fallbackToDestructiveMigration()
                 .build()

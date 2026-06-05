@@ -8,5 +8,5 @@ import com.example.loophabit.data.LoopPreferences
 class LoopHabitApp : Application() {
     val database by lazy { AppDatabase.getDatabase(this) }
     val preferences by lazy { LoopPreferences(this) }
-    val repository by lazy { HabitRepository(database.habitDao(), preferences) }
+    val repository by lazy { HabitRepository(database.habitDao(), database.userDao(), preferences) }
 }

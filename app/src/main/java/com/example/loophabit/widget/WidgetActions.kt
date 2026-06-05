@@ -5,6 +5,7 @@ import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
 import com.example.loophabit.LoopHabitApp
+import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -19,7 +20,10 @@ class CompleteHabitAction : ActionCallback {
         val app = context.applicationContext as LoopHabitApp
         val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
-        app.repository.completeHabit(habitId, todayDate)
+        val currentUserId = app.repository.currentUserIdFlow.first()
+        if (currentUserId != 0L) {
+            app.repository.completeHabit(currentUserId, habitId, todayDate)
+        }
 
         // Request widget UI update
         HabitWidget().update(context, glanceId)
@@ -40,7 +44,10 @@ class CycleIndexAction : ActionCallback {
         val app = context.applicationContext as LoopHabitApp
         val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
-        app.repository.cycleIndex(direction, todayDate)
+        val currentUserId = app.repository.currentUserIdFlow.first()
+        if (currentUserId != 0L) {
+            app.repository.cycleIndex(currentUserId, direction, todayDate)
+        }
 
         // Request widget UI update
         HabitWidget().update(context, glanceId)

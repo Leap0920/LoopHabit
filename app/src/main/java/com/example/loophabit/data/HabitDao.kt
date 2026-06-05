@@ -5,14 +5,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface HabitDao {
-    @Query("SELECT * FROM habits ORDER BY createdAt ASC")
-    fun getAllHabits(): Flow<List<Habit>>
+    @Query("SELECT * FROM habits WHERE userId = :userId ORDER BY createdAt ASC")
+    fun getAllHabits(userId: Long): Flow<List<Habit>>
 
-    @Query("SELECT * FROM habits WHERE id NOT IN (SELECT habitId FROM habit_completions WHERE date = :date) ORDER BY createdAt ASC")
-    fun getIncompleteHabits(date: String): Flow<List<Habit>>
+    @Query("SELECT * FROM habits WHERE userId = :userId AND id NOT IN (SELECT habitId FROM habit_completions WHERE date = :date) ORDER BY createdAt ASC")
+    fun getIncompleteHabits(userId: Long, date: String): Flow<List<Habit>>
 
-    @Query("SELECT * FROM habits WHERE id IN (SELECT habitId FROM habit_completions WHERE date = :date) ORDER BY createdAt ASC")
-    fun getCompletedHabits(date: String): Flow<List<Habit>>
+    @Query("SELECT * FROM habits WHERE userId = :userId AND id IN (SELECT habitId FROM habit_completions WHERE date = :date) ORDER BY createdAt ASC")
+    fun getCompletedHabits(userId: Long, date: String): Flow<List<Habit>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHabit(habit: Habit): Long
@@ -28,4 +28,19 @@ interface HabitDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM habit_completions WHERE habitId = :habitId AND date = :date)")
     suspend fun isCompletedToday(habitId: Long, date: String): Boolean
+
+    @Query("SELECT date FROM habit_completions WHERE habitId = :habitId ORDER BY date ASC")
+    fun getCompletionDates(habitId: Long): Flow<List<String>>
+
+    @Query("SELECT * FROM habit_completions WHERE habitId = :habitId AND date = :date LIMIT 1")
+    suspend fun getCompletion(habitId: Long, date: String): HabitCompletion?
+
+    @Update
+    suspend fun updateCompletion(completion: HabitCompletion): Int
+
+    @Query("SELECT * FROM habit_completions WHERE habitId = :habitId ORDER BY date ASC")
+    fun getCompletionsForHabit(habitId: Long): Flow<List<HabitCompletion>>
+
+    @Query("SELECT hc.* FROM habit_completions hc INNER JOIN habits h ON hc.habitId = h.id WHERE h.userId = :userId")
+    fun getAllCompletionsForUser(userId: Long): Flow<List<HabitCompletion>>
 }

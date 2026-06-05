@@ -40,7 +40,8 @@ class HabitWidget : GlanceAppWidget() {
         val app = context.applicationContext as LoopHabitApp
         val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
-        val incompleteHabits by app.repository.getIncompleteHabitsOfToday(todayDate)
+        val currentUserId by app.repository.currentUserIdFlow.collectAsState(initial = 0L)
+        val incompleteHabits by app.repository.getIncompleteHabitsOfToday(currentUserId, todayDate)
             .collectAsState(initial = emptyList())
         val loopIndex by app.repository.loopIndexFlow.collectAsState(initial = 0)
 
@@ -52,7 +53,36 @@ class HabitWidget : GlanceAppWidget() {
             modifier = GlanceModifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            if (activeHabit != null) {
+            if (currentUserId == 0L) {
+                Column(
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                        .height(100.dp)
+                        .background(ColorProvider(Color(0xFF1E1E1E)))
+                        .cornerRadius(16.dp)
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🔒 Account Logged Out",
+                        style = TextStyle(
+                            color = ColorProvider(Color.White),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    )
+                    Spacer(modifier = GlanceModifier.height(4.dp))
+                    Text(
+                        text = "Please log in to track habits.",
+                        style = TextStyle(
+                            color = ColorProvider(Color.Gray),
+                            fontSize = 11.sp
+                        )
+                    )
+                }
+            } else if (activeHabit != null) {
                 // Background cards to represent stacking depth
                 if (size >= 3) {
                     Box(
