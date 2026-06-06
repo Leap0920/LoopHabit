@@ -40,6 +40,8 @@ class LoopHabitApp : Application() {
         SyncScheduler.schedulePeriodicSync(this)
         // Register network callback for immediate sync on connectivity restore
         SyncScheduler.registerNetworkCallback(this)
+        // Schedule daily habit reminder at 8:00 PM
+        com.example.loophabit.data.sync.ReminderWorker.scheduleDailyReminder(this)
     }
 
     override fun onTerminate() {

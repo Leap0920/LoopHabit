@@ -24,5 +24,6 @@ data class HabitCompletion(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val habitId: Long,
     val date: String, // Format: YYYY-MM-DD
-    val notes: String? = null
+    val notes: String? = null,
+    val value: Double = 0.0
 )

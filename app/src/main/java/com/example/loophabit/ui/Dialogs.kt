@@ -1,6 +1,7 @@
 package com.example.loophabit.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -80,11 +81,18 @@ val ColorPaletteList = listOf(
 @Composable
 fun AddHabitDialog(
     onDismiss: () -> Unit,
-    onAdd: (String, String, Int) -> Unit
+    onAdd: (String, String, Int, Boolean, Double, String, String) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
     var selectedColor by remember { mutableStateOf(ColorPaletteList[0]) }
     var targetDaysPerWeek by remember { mutableStateOf(7) }
+
+    var isNumerical by remember { mutableStateOf(false) }
+    var numericalGoal by remember { mutableStateOf("") }
+    var numericalUnit by remember { mutableStateOf("") }
+
+    var repeatType by remember { mutableStateOf("EVERYDAY") } // EVERYDAY, WEEKDAYS, CUSTOM
+    var customDays by remember { mutableStateOf(listOf(true, true, true, true, true, true, true)) } // M, T, W, T, F, S, S
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -137,6 +145,133 @@ fun AddHabitDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Repeat Schedule Options
+                Text(
+                    text = "Repeat Schedule",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("EVERYDAY" to "Everyday", "WEEKDAYS" to "Weekdays", "CUSTOM" to "Custom").forEach { (type, label) ->
+                        val isSelected = repeatType == type
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (isSelected) Color(android.graphics.Color.parseColor(selectedColor))
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                )
+                                .clickable { repeatType = type }
+                        ) {
+                            Text(
+                                text = label,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                if (repeatType == "CUSTOM") {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        val weekdayNames = listOf("M", "T", "W", "T", "F", "S", "S")
+                        customDays.forEachIndexed { index, isSelected ->
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isSelected) Color(android.graphics.Color.parseColor(selectedColor)).copy(alpha = 0.2f)
+                                        else Color.Transparent
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) Color(android.graphics.Color.parseColor(selectedColor))
+                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                        shape = CircleShape
+                                    )
+                                    .clickable {
+                                        customDays = customDays.toMutableList().apply { this[index] = !isSelected }
+                                    }
+                            ) {
+                                Text(
+                                    text = weekdayNames[index],
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    color = if (isSelected) Color(android.graphics.Color.parseColor(selectedColor))
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Numerical Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Set Numerical Goal",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Switch(
+                        checked = isNumerical,
+                        onCheckedChange = { isNumerical = it }
+                    )
+                }
+
+                if (isNumerical) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = numericalGoal,
+                            onValueChange = { numericalGoal = it },
+                            label = { Text("Target Goal") },
+                            placeholder = { Text("e.g. 3000") },
+                            shape = RoundedCornerShape(12.dp),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                            ),
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = numericalUnit,
+                            onValueChange = { numericalUnit = it },
+                            label = { Text("Unit") },
+                            placeholder = { Text("e.g. ml") },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text(
                     text = "Pick Color",
                     fontWeight = FontWeight.SemiBold,
@@ -183,7 +318,17 @@ fun AddHabitDialog(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
-                        onClick = { if (title.isNotBlank()) onAdd(title, selectedColor, targetDaysPerWeek) },
+                        onClick = {
+                            if (title.isNotBlank()) {
+                                val goal = numericalGoal.toDoubleOrNull() ?: 0.0
+                                val pattern = when (repeatType) {
+                                    "EVERYDAY" -> "1111111"
+                                    "WEEKDAYS" -> "1111100"
+                                    else -> customDays.map { if (it) '1' else '0' }.joinToString("")
+                                }
+                                onAdd(title, selectedColor, targetDaysPerWeek, isNumerical, goal, numericalUnit, pattern)
+                            }
+                        },
                         enabled = title.isNotBlank(),
                         shape = RoundedCornerShape(16.dp)
                     ) {
@@ -194,6 +339,7 @@ fun AddHabitDialog(
         }
     }
 }
+
 
 @Composable
 fun ManageHabitsDialog(
@@ -356,7 +502,7 @@ fun HabitDetailsDialog(
     val completions by viewModel.getCompletionsForHabit(habit.id).collectAsState(initial = emptyList())
     val completionDates = remember(completions) { completions.map { it.date } }
     val (currentStreak, bestStreak) = remember(completionDates) {
-        viewModel.calculateStreaks(completionDates)
+        viewModel.calculateStreaks(completionDates, habit.daysOfWeekPattern)
     }
 
     val parsedColor = remember(habit.colorHex) {
@@ -482,12 +628,16 @@ fun HabitDetailsDialog(
             dateStr = dateStr,
             wasCompleted = wasCompleted,
             existingNotes = existingNotes,
+            isNumerical = habit.isNumerical,
+            numericalGoal = habit.numericalGoal,
+            numericalUnit = habit.numericalUnit,
+            existingValue = existingCompletion?.value ?: 0.0,
             onDismiss = { showNoteEditDialogForDate = null },
-            onSave = { isCompleted, notesText ->
-                viewModel.toggleHabitCompletionForDate(habit.id, dateStr, wasCompleted, if (isCompleted) notesText else null)
+            onSave = { isCompleted, notesText, value ->
+                viewModel.toggleHabitCompletionForDate(habit.id, dateStr, wasCompleted, if (isCompleted) notesText else null, value)
                 // If it was already completed and remains completed, but they edited notes:
                 if (wasCompleted && isCompleted) {
-                    viewModel.saveCompletionNote(habit.id, dateStr, notesText.ifBlank { null })
+                    viewModel.saveCompletionNote(habit.id, dateStr, notesText.ifBlank { null }, value)
                 }
                 showNoteEditDialogForDate = null
             }
@@ -500,11 +650,16 @@ fun NoteEditDialog(
     dateStr: String,
     wasCompleted: Boolean,
     existingNotes: String,
+    isNumerical: Boolean = false,
+    numericalGoal: Double = 0.0,
+    numericalUnit: String = "",
+    existingValue: Double = 0.0,
     onDismiss: () -> Unit,
-    onSave: (Boolean, String) -> Unit
+    onSave: (Boolean, String, Double) -> Unit
 ) {
     var isCompleted by remember { mutableStateOf(wasCompleted) }
     var notesText by remember { mutableStateOf(existingNotes) }
+    var valueText by remember { mutableStateOf(if (existingValue > 0.0) existingValue.toString() else "") }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -541,6 +696,27 @@ fun NoteEditDialog(
                     )
                 }
 
+                if (isNumerical) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = valueText,
+                        onValueChange = {
+                            valueText = it
+                            if (it.toDoubleOrNull() != null) {
+                                isCompleted = true
+                            }
+                        },
+                        label = { Text("Progress Value ($numericalUnit)") },
+                        placeholder = { Text("Goal: $numericalGoal $numericalUnit") },
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(
@@ -566,7 +742,10 @@ fun NoteEditDialog(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
-                        onClick = { onSave(isCompleted, notesText) },
+                        onClick = {
+                            val v = valueText.toDoubleOrNull() ?: 0.0
+                            onSave(isCompleted, notesText, v)
+                        },
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Text("Save")
@@ -576,3 +755,77 @@ fun NoteEditDialog(
         }
     }
 }
+
+@Composable
+fun NumericalLogDialog(
+    habit: Habit,
+    onDismiss: () -> Unit,
+    onLog: (Double) -> Unit
+) {
+    var valueStr by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    text = "Log ${habit.title}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Daily Goal: ${habit.numericalGoal} ${habit.numericalUnit}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = valueStr,
+                    onValueChange = { valueStr = it },
+                    label = { Text("Logged value (${habit.numericalUnit})") },
+                    placeholder = { Text("e.g. 2500") },
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val v = valueStr.toDoubleOrNull() ?: 0.0
+                            onLog(v)
+                        },
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("Log Value")
+                    }
+                }
+            }
+        }
+    }
+}
+

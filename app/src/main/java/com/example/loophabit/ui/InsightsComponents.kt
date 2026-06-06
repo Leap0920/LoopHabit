@@ -3,6 +3,9 @@ package com.example.loophabit.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +36,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,8 +56,26 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import com.example.loophabit.data.Habit
 import com.example.loophabit.data.HabitCompletion
+import kotlinx.coroutines.launch
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.LocalFireDepartment
+import androidx.compose.material.icons.outlined.EmojiEvents
+import androidx.compose.material.icons.outlined.MilitaryTech
+import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.material.icons.outlined.OfflineBolt
+import androidx.compose.material.icons.outlined.Lock
 import java.util.Locale
 import kotlin.math.roundToInt
+
+data class AchievementItem(
+    val id: String,
+    val title: String,
+    val description: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val isUnlocked: Boolean,
+    val progressText: String,
+    val color: Color
+)
 
 @Composable
 fun InsightsDashboard(
@@ -91,7 +116,7 @@ fun InsightsDashboard(
     val habitStreaks = remember(allHabits, allCompletions) {
         allHabits.map { habit ->
             val dates = allCompletions.filter { it.habitId == habit.id }.map { it.date }
-            val (current, best) = viewModel.calculateStreaks(dates)
+            val (current, best) = viewModel.calculateStreaks(dates, habit.daysOfWeekPattern)
             Triple(habit, current, best)
         }.sortedByDescending { it.second }
     }
@@ -121,6 +146,20 @@ fun InsightsDashboard(
             }
         }
         counts
+    }
+    val maxBestStreak = remember(habitStreaks) {
+        habitStreaks.maxOfOrNull { it.third } ?: 0
+    }
+
+    val achievements = remember(totalCompletions, maxBestStreak, overallConsistency, allHabits) {
+        listOf(
+            AchievementItem("first_step", "First Step", "Complete 1 habit", Icons.Outlined.CheckCircle, totalCompletions >= 1, "${if (totalCompletions >= 1) 1 else 0}/1", Color(0xFF06D6A0)),
+            AchievementItem("streak_3", "3-Day Streak", "Reach a 3-day streak", Icons.Outlined.LocalFireDepartment, maxBestStreak >= 3, "$maxBestStreak/3", Color(0xFFFF9F1C)),
+            AchievementItem("streak_7", "7-Day Streak", "Reach a 7-day streak", Icons.Outlined.EmojiEvents, maxBestStreak >= 7, "$maxBestStreak/7", Color(0xFFEF476F)),
+            AchievementItem("streak_14", "14-Day Champion", "Reach a 14-day streak", Icons.Outlined.MilitaryTech, maxBestStreak >= 14, "$maxBestStreak/14", Color(0xFF8338EC)),
+            AchievementItem("streak_30", "30-Day Legend", "Reach a 30-day streak", Icons.Outlined.WorkspacePremium, maxBestStreak >= 30, "$maxBestStreak/30", Color(0xFF118AB2)),
+            AchievementItem("consistency_80", "Consistency Champ", "Maintain 80%+ consistency", Icons.Outlined.OfflineBolt, overallConsistency >= 80 && allHabits.isNotEmpty(), "$overallConsistency%/80%", Color(0xFFFFD166))
+        )
     }
 
     Column(
@@ -200,6 +239,99 @@ fun InsightsDashboard(
         }
 
         Spacer(modifier = Modifier.height(20.dp))
+
+        // Achievements Milestones Section
+        Text(
+            text = "🏆 Achievement Milestones",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            achievements.forEach { achievement ->
+                val scale = remember { androidx.compose.animation.core.Animatable(1f) }
+                val scope = rememberCoroutineScope()
+                
+                Card(
+                    modifier = Modifier
+                        .width(135.dp)
+                        .graphicsLayer {
+                            scaleX = scale.value
+                            scaleY = scale.value
+                        }
+                        .clickable {
+                            scope.launch {
+                                scale.animateTo(0.9f, tween(100))
+                                scale.animateTo(1f, spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy))
+                            }
+                        },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (achievement.isUnlocked) achievement.color.copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    border = if (achievement.isUnlocked) androidx.compose.foundation.BorderStroke(1.5.dp, achievement.color.copy(alpha = 0.5f)) else null
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (achievement.isUnlocked) achievement.color.copy(alpha = 0.2f)
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                                )
+                        ) {
+                            Icon(
+                                imageVector = if (achievement.isUnlocked) achievement.icon else Icons.Outlined.Lock,
+                                contentDescription = achievement.title,
+                                tint = if (achievement.isUnlocked) achievement.color else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = achievement.title,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = achievement.description,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 12.sp,
+                            modifier = Modifier.height(28.dp),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = achievement.progressText,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp,
+                            color = if (achievement.isUnlocked) achievement.color else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         // 14-day history bar chart
         Card(
@@ -330,6 +462,24 @@ fun InsightsDashboard(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+        // Focus Session Analytics
+        Text(
+            text = "⏱️ Focus Session Analytics",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+
+        val allFocusSessions by viewModel.allFocusSessions.collectAsState()
+        FocusAnalyticsSection(
+            allFocusSessions = allFocusSessions,
+            allHabits = allHabits,
+            chartProgress = chartProgress
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
         // Habit performance leaderboard
         Text(
             text = "Habit Insights List",
@@ -429,6 +579,268 @@ fun InsightsDashboard(
         }
 
         Spacer(modifier = Modifier.height(20.dp))
+    }
+}
+
+@Composable
+fun FocusAnalyticsSection(
+    allFocusSessions: List<com.example.loophabit.data.FocusSession>,
+    allHabits: List<com.example.loophabit.data.Habit>,
+    chartProgress: Float
+) {
+    if (allFocusSessions.isEmpty()) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No focus sessions logged yet. Start a focus session to see your analytics!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        return
+    }
+
+    val totalDurationSeconds = allFocusSessions.sumOf { it.durationSeconds }
+    val totalFocusMinutes = totalDurationSeconds / 60
+    val totalSessions = allFocusSessions.size
+    val avgSessionMinutes = if (totalSessions > 0) (totalFocusMinutes / totalSessions) else 0
+
+    // 1. Total Focus Cards
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Card(
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Total Focus Time",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "$totalFocusMinutes mins",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        Card(
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
+            )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Avg Session",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "$avgSessionMinutes mins",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(20.dp))
+
+    // 2. Focus Breakdown by Habit
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Focus Breakdown per Habit",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val totalSecFloat = totalDurationSeconds.toFloat().coerceAtLeast(1f)
+            val breakdown = allFocusSessions.groupBy { it.habitId }
+                .map { (habitId, sessions) ->
+                    val habit = allHabits.firstOrNull { it.id == habitId }
+                    val minutes = sessions.sumOf { it.durationSeconds } / 60
+                    val percentage = (sessions.sumOf { it.durationSeconds }.toFloat() / totalSecFloat)
+                    val color = habit?.colorHex?.let {
+                        try {
+                            Color(android.graphics.Color.parseColor(it))
+                        } catch (e: Exception) {
+                            MaterialTheme.colorScheme.primary
+                        }
+                    } ?: MaterialTheme.colorScheme.outline
+                    val title = habit?.title ?: "General Focus"
+                    Triple(title, minutes, percentage to color)
+                }.sortedByDescending { it.second }
+
+            breakdown.forEach { (title, minutes, pctColor) ->
+                val (pct, color) = pctColor
+                Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "$minutes mins (${(pct * 100).roundToInt()}%)",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(fraction = pct * chartProgress)
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(color)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(20.dp))
+
+    // 3. Productive Focus Hours
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Productive Focus Hours",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val intervalMinutes = IntArray(12)
+            for (session in allFocusSessions) {
+                try {
+                    val instant = java.time.Instant.ofEpochMilli(session.timestamp)
+                    val localDateTime = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
+                    val hour = localDateTime.hour
+                    val idx = (hour / 2) % 12
+                    intervalMinutes[idx] += session.durationSeconds / 60
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            val maxMinutes = intervalMinutes.maxOrNull()?.coerceAtLeast(1) ?: 1
+            val intervalLabels = listOf(
+                "12-2a", "2-4a", "4-6a", "6-8a", "8-10a", "10-12p",
+                "12-2p", "2-4p", "4-6p", "6-8p", "8-10p", "10-12a"
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(110.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                intervalMinutes.forEachIndexed { idx, minutes ->
+                    val ratio = (minutes.toFloat() / maxMinutes.toFloat()) * chartProgress
+                    val barHeight = (ratio * 70).coerceAtLeast(4f).dp
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom,
+                        modifier = Modifier.width(38.dp)
+                    ) {
+                        if (minutes > 0) {
+                            Text(
+                                text = "${minutes}m",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(barHeight)
+                                .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.tertiary,
+                                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)
+                                        )
+                                    )
+                                )
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = intervalLabels[idx],
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -786,6 +1198,174 @@ fun YearAtAGlanceGrid(
 }
 
 @Composable
+fun NumericalLineChart(
+    completions: List<com.example.loophabit.data.HabitCompletion>,
+    color: Color,
+    unit: String,
+    goal: Double,
+    modifier: Modifier = Modifier
+) {
+    val dataPoints = remember(completions) {
+        completions
+            .sortedBy { it.date }
+            .takeLast(10)
+            .map { it.date to it.value }
+    }
+
+    if (dataPoints.isEmpty()) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f), RoundedCornerShape(16.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "No numeric data logged yet.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        return
+    }
+
+    val maxVal = remember(dataPoints, goal) {
+        val maxOfPoints = dataPoints.maxOfOrNull { it.second } ?: 0.0
+        kotlin.math.max(maxOfPoints, goal) * 1.2f
+    }
+    val minVal = 0.0
+
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Progress Trend ($unit)",
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+            ) {
+                val width = size.width
+                val height = size.height
+                val paddingLeft = 60f
+                val paddingRight = 30f
+                val paddingTop = 30f
+                val paddingBottom = 40f
+
+                val chartWidth = width - paddingLeft - paddingRight
+                val chartHeight = height - paddingTop - paddingBottom
+
+                val range = maxVal - minVal
+                val heightScale = if (range > 0) chartHeight / range.toFloat() else 1f
+
+                // Draw Goal dashed line
+                val goalY = paddingTop + chartHeight - (goal * heightScale).toFloat()
+                if (goalY in paddingTop..(paddingTop + chartHeight)) {
+                    drawLine(
+                        color = Color.Gray.copy(alpha = 0.5f),
+                        start = androidx.compose.ui.geometry.Offset(paddingLeft, goalY),
+                        end = androidx.compose.ui.geometry.Offset(width - paddingRight, goalY),
+                        strokeWidth = 2f,
+                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                    )
+                }
+
+                if (dataPoints.size == 1) {
+                    val x = paddingLeft + chartWidth / 2
+                    val valRatio = ((dataPoints[0].second - minVal) / (maxVal - minVal)).toFloat()
+                    val y = paddingTop + chartHeight - (valRatio * chartHeight)
+                    drawCircle(
+                        color = color,
+                        radius = 8f,
+                        center = androidx.compose.ui.geometry.Offset(x, y)
+                    )
+                } else {
+                    val points = dataPoints.indices.map { i ->
+                        val x = paddingLeft + (i.toFloat() / (dataPoints.size - 1)) * chartWidth
+                        val valRatio = ((dataPoints[i].second - minVal) / (maxVal - minVal)).toFloat()
+                        val y = paddingTop + chartHeight - (valRatio * chartHeight)
+                        androidx.compose.ui.geometry.Offset(x, y)
+                    }
+
+                    // Draw filled Area under the path
+                    val areaPath = Path().apply {
+                        moveTo(points.first().x, paddingTop + chartHeight)
+                        points.forEach { lineTo(it.x, it.y) }
+                        lineTo(points.last().x, paddingTop + chartHeight)
+                        close()
+                    }
+                    drawPath(
+                        path = areaPath,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(color.copy(alpha = 0.3f), color.copy(alpha = 0.01f))
+                        )
+                    )
+
+                    // Draw the line
+                    val linePath = Path().apply {
+                        moveTo(points.first().x, points.first().y)
+                        for (i in 1 until points.size) {
+                            lineTo(points[i].x, points[i].y)
+                        }
+                    }
+                    drawPath(
+                        path = linePath,
+                        color = color,
+                        style = Stroke(width = 4f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    )
+
+                    // Draw dots on vertices
+                    points.forEach { pt ->
+                        drawCircle(
+                            color = Color.White,
+                            radius = 6f,
+                            center = pt
+                        )
+                        drawCircle(
+                            color = color,
+                            radius = 4f,
+                            center = pt,
+                            style = Stroke(width = 2f)
+                        )
+                    }
+                }
+            }
+
+            // X-axis label captions
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (dataPoints.isNotEmpty()) {
+                    Text(dataPoints.first().first.substring(5), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (dataPoints.size > 2) {
+                    Text(dataPoints[dataPoints.size / 2].first.substring(5), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (dataPoints.size > 1) {
+                    Text(dataPoints.last().first.substring(5), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun InsightsStatsTab(
     habit: Habit,
     completions: List<HabitCompletion>,
@@ -884,7 +1464,15 @@ fun InsightsStatsTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        if (habit.isNumerical) {
+            NumericalLineChart(
+                completions = completions,
+                color = parsedColor,
+                unit = habit.numericalUnit,
+                goal = habit.numericalGoal
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
 
         // Weekly Target Goal Progress Card
         Card(
@@ -945,7 +1533,7 @@ fun InsightsStatsTab(
         )
         Spacer(modifier = Modifier.height(10.dp))
 
-        val notesLogs = completions.filter { !it.notes.isNullOrBlank() }.sortedByDescending { it.date }
+        val notesLogs = completions.filter { !it.notes.isNullOrBlank() || it.value > 0.0 }.sortedByDescending { it.date }
         if (notesLogs.isEmpty()) {
             Box(
                 modifier = Modifier
@@ -954,7 +1542,7 @@ fun InsightsStatsTab(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No notes saved for this habit yet. Write some diaries on the Calendar tab!",
+                    text = "No notes or numeric values logged yet. Track them on the Calendar or swipe cards!",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -983,17 +1571,24 @@ fun InsightsStatsTab(
                                     color = parsedColor
                                 )
                                 Text(
-                                    text = "Completed",
+                                    text = if (habit.isNumerical) {
+                                        "${item.value} / ${habit.numericalGoal} ${habit.numericalUnit}"
+                                    } else {
+                                        "Completed"
+                                    },
                                     fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = item.notes ?: "",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            if (!item.notes.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = item.notes ?: "",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
                 }

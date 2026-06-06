@@ -154,6 +154,7 @@ fun MainScreen(viewModel: HabitViewModel) {
     var showManageDialog by remember { mutableStateOf(false) }
     var showLogoutConfirmation by remember { mutableStateOf(false) }
     var selectedHabitForDetails by remember { mutableStateOf<Habit?>(null) }
+    var showNumericalLogDialogForHabit by remember { mutableStateOf<Habit?>(null) }
 
     val totalHabitsCount = incompleteHabits.size + completedHabits.size
     val completionProgress = if (totalHabitsCount > 0) {
@@ -358,7 +359,13 @@ fun MainScreen(viewModel: HabitViewModel) {
                                                 SwipeableCard(
                                                     habit = habit,
                                                     onSwipeLeft = { viewModel.nextHabit() },
-                                                    onSwipeRight = { viewModel.completeHabit(habit.id) },
+                                                    onSwipeRight = {
+                                                        if (habit.isNumerical) {
+                                                            showNumericalLogDialogForHabit = habit
+                                                        } else {
+                                                            viewModel.completeHabit(habit.id)
+                                                        }
+                                                    },
                                                     modifier = Modifier
                                                         .graphicsLayer {
                                                             this.scaleX = scale
@@ -494,8 +501,8 @@ fun MainScreen(viewModel: HabitViewModel) {
     if (showAddDialog) {
         AddHabitDialog(
             onDismiss = { showAddDialog = false },
-            onAdd = { title, colorHex, targetDays ->
-                viewModel.addHabit(title, colorHex, targetDays)
+            onAdd = { title, colorHex, targetDays, isNum, goal, unit, pattern ->
+                viewModel.addHabit(title, colorHex, targetDays, isNum, goal, unit, pattern)
                 showAddDialog = false
             }
         )
@@ -513,6 +520,18 @@ fun MainScreen(viewModel: HabitViewModel) {
                 selectedHabitForDetails = habit
             },
             app = app
+        )
+    }
+
+    if (showNumericalLogDialogForHabit != null) {
+        val habit = showNumericalLogDialogForHabit!!
+        NumericalLogDialog(
+            habit = habit,
+            onDismiss = { showNumericalLogDialogForHabit = null },
+            onLog = { value ->
+                viewModel.completeHabitNumerical(habit.id, value)
+                showNumericalLogDialogForHabit = null
+            }
         )
     }
 

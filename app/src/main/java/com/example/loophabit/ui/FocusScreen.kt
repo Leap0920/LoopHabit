@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,10 +37,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.loophabit.data.Habit
 import kotlinx.coroutines.delay
+import android.media.RingtoneManager
+import android.os.Vibrator
+import android.os.VibrationEffect
+import android.os.VibratorManager
+import android.os.Build
+import android.content.Context
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FocusScreen(viewModel: HabitViewModel) {
+    val context = LocalContext.current
     val habits by viewModel.allHabits.collectAsState()
 
     var selectedHabit by remember { mutableStateOf<Habit?>(null) }
@@ -92,6 +100,48 @@ fun FocusScreen(viewModel: HabitViewModel) {
                     if (secondsLeft == 0) {
                         isRunning = false
                         showSuccessDialog = true
+                        
+                        // Log focus session in database
+                        val duration = initialDurationMinutes * 60
+                        viewModel.logFocusSession(
+                            habitId = selectedHabit?.id,
+                            durationSeconds = duration,
+                            details = taskDetails.takeIf { it.isNotBlank() }
+                        )
+
+                        // Play Ringtone default chime
+                        try {
+                            val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                            val ringtone = RingtoneManager.getRingtone(context, notificationUri)
+                            ringtone?.play()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+
+                        // Trigger soft dual-pulse vibration pattern
+                        try {
+                            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                                vibratorManager?.defaultVibrator
+                            } else {
+                                @Suppress("DEPRECATION")
+                                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                            }
+                            vibrator?.let {
+                                if (it.hasVibrator()) {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        val timings = longArrayOf(0, 150, 100, 150)
+                                        val amplitudes = intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 0, VibrationEffect.DEFAULT_AMPLITUDE)
+                                        it.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
+                                    } else {
+                                        @Suppress("DEPRECATION")
+                                        it.vibrate(longArrayOf(0, 150, 100, 150), -1)
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     }
                 }
             } else {
@@ -291,6 +341,16 @@ fun FocusScreen(viewModel: HabitViewModel) {
                     IconButton(
                         onClick = {
                             isRunning = false
+                            val duration = if (focusMode == "TIMER") {
+                                initialDurationMinutes * 60 - secondsLeft
+                            } else {
+                                secondsElapsed
+                            }
+                            viewModel.logFocusSession(
+                                habitId = selectedHabit?.id,
+                                durationSeconds = duration,
+                                details = taskDetails.takeIf { it.isNotBlank() }
+                            )
                             showSuccessDialog = true
                         },
                         modifier = Modifier

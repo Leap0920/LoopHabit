@@ -49,6 +49,12 @@ class HabitViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allFocusSessions: StateFlow<List<com.example.loophabit.data.FocusSession>> = currentUserId
+        .flatMapLatest { userId ->
+            if (userId == 0L) flowOf(emptyList()) else repository.getAllFocusSessions(userId)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val incompleteHabits: StateFlow<List<Habit>> = currentUserId
         .flatMapLatest { userId ->
             if (userId == 0L) flowOf(emptyList()) else repository.getIncompleteHabitsOfToday(userId, todayDate)
@@ -94,11 +100,29 @@ class HabitViewModel(
         }
     }
 
-    fun addHabit(title: String, colorHex: String, targetDaysPerWeek: Int = 7) {
+    fun addHabit(
+        title: String,
+        colorHex: String,
+        targetDaysPerWeek: Int = 7,
+        isNumerical: Boolean = false,
+        numericalGoal: Double = 0.0,
+        numericalUnit: String = "",
+        daysOfWeekPattern: String = "1111111"
+    ) {
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
-                repository.addHabit(userId, title, colorHex, targetDaysPerWeek, todayDate)
+                repository.addHabit(
+                    userId = userId,
+                    title = title,
+                    colorHex = colorHex,
+                    targetDaysPerWeek = targetDaysPerWeek,
+                    date = todayDate,
+                    isNumerical = isNumerical,
+                    numericalGoal = numericalGoal,
+                    numericalUnit = numericalUnit,
+                    daysOfWeekPattern = daysOfWeekPattern
+                )
                 triggerSync()
                 updateWidget()
             }
@@ -120,6 +144,15 @@ class HabitViewModel(
                 repository.completeHabit(userId, habitId, todayDate)
                 triggerSync()
                 updateWidget()
+            }
+        }
+    }
+
+    fun logFocusSession(habitId: Long?, durationSeconds: Int, details: String?) {
+        viewModelScope.launch {
+            val userId = currentUserId.value
+            if (userId != 0L) {
+                repository.logFocusSession(userId, habitId, durationSeconds, details)
             }
         }
     }
@@ -302,74 +335,92 @@ class HabitViewModel(
     fun getCompletionsForHabit(habitId: Long): kotlinx.coroutines.flow.Flow<List<com.example.loophabit.data.HabitCompletion>> =
         repository.getCompletionsForHabit(habitId)
 
-    fun toggleHabitCompletionForDate(habitId: Long, dateStr: String, wasCompleted: Boolean, notes: String? = null) {
+    fun toggleHabitCompletionForDate(
+        habitId: Long,
+        dateStr: String,
+        wasCompleted: Boolean,
+        notes: String? = null,
+        value: Double = 0.0
+    ) {
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId == 0L) return@launch
             if (wasCompleted) {
                 repository.uncompleteHabit(userId, habitId, dateStr)
             } else {
-                repository.completeHabitWithNote(userId, habitId, dateStr, notes)
+                repository.completeHabitWithNote(userId, habitId, dateStr, notes, value)
             }
         }
     }
 
-    fun saveCompletionNote(habitId: Long, dateStr: String, notes: String?) {
+    fun completeHabitNumerical(habitId: Long, value: Double, notes: String? = null) {
         viewModelScope.launch {
             val userId = currentUserId.value
-            if (userId == 0L) return@launch
-            repository.updateCompletionNotes(habitId, dateStr, notes)
+            if (userId != 0L) {
+                repository.completeHabitWithNote(userId, habitId, todayDate, notes, value)
+                triggerSync()
+                updateWidget()
+            }
         }
     }
 
-    fun calculateStreaks(dates: List<String>): Pair<Int, Int> {
+    fun saveCompletionNote(habitId: Long, dateStr: String, notes: String?, value: Double = 0.0) {
+        viewModelScope.launch {
+            val userId = currentUserId.value
+            if (userId == 0L) return@launch
+            repository.completeHabitWithNote(userId, habitId, dateStr, notes, value)
+        }
+    }
+
+    fun calculateStreaks(dates: List<String>, daysOfWeekPattern: String = "1111111"): Pair<Int, Int> {
         if (dates.isEmpty()) return Pair(0, 0)
         return try {
             val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
             val sortedDates = dates.map { java.time.LocalDate.parse(it, formatter) }.distinct().sorted()
 
+            val safePattern = if (daysOfWeekPattern.length == 7) daysOfWeekPattern else "1111111"
+
+            fun isRestDay(date: java.time.LocalDate): Boolean {
+                val dayOfWeekVal = date.dayOfWeek.value // 1 (Mon) to 7 (Sun)
+                val idx = dayOfWeekVal - 1
+                return if (idx in safePattern.indices) safePattern[idx] == '0' else false
+            }
+
             var bestStreak = 0
             var tempStreak = 0
-            var lastDate: java.time.LocalDate? = null
 
-            for (date in sortedDates) {
-                if (lastDate == null) {
-                    tempStreak = 1
+            val startDate = sortedDates.first()
+            val today = java.time.LocalDate.now()
+            val endDate = if (today.isAfter(sortedDates.last())) today else sortedDates.last()
+
+            var curr = startDate
+            while (!curr.isAfter(endDate)) {
+                val isCompleted = sortedDates.contains(curr)
+                if (isCompleted) {
+                    tempStreak++
                 } else {
-                    val diff = java.time.temporal.ChronoUnit.DAYS.between(lastDate, date)
-                    if (diff == 1L) {
-                        tempStreak++
-                    } else if (diff > 1L) {
-                        if (tempStreak > bestStreak) {
-                            bestStreak = tempStreak
+                    if (isRestDay(curr)) {
+                        // Rest day: streak does not break, it freezes/preserves
+                    } else {
+                        if (curr == today) {
+                            // Today is not completed yet, but user still has time
+                        } else {
+                            // Past active day skipped: streak breaks
+                            if (tempStreak > bestStreak) {
+                                bestStreak = tempStreak
+                            }
+                            tempStreak = 0
                         }
-                        tempStreak = 1
                     }
                 }
-                lastDate = date
+                curr = curr.plusDays(1)
             }
+
             if (tempStreak > bestStreak) {
                 bestStreak = tempStreak
             }
 
-            val today = java.time.LocalDate.now()
-            val yesterday = today.minusDays(1)
-            val hasToday = sortedDates.contains(today)
-            val hasYesterday = sortedDates.contains(yesterday)
-
-            val currentStreak = if (hasToday || hasYesterday) {
-                var streak = 0
-                var checkDate = if (hasToday) today else yesterday
-                while (sortedDates.contains(checkDate)) {
-                    streak++
-                    checkDate = checkDate.minusDays(1)
-                }
-                streak
-            } else {
-                0
-            }
-
-            Pair(currentStreak, bestStreak)
+            Pair(tempStreak, bestStreak)
         } catch (e: Exception) {
             e.printStackTrace()
             Pair(0, 0)

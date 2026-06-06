@@ -29,8 +29,27 @@ class HabitRepository(
     fun getCompletedHabitsOfToday(userId: Long, date: String): Flow<List<Habit>> =
         habitDao.getCompletedHabits(userId, date)
 
-    suspend fun addHabit(userId: Long, title: String, colorHex: String, targetDaysPerWeek: Int, date: String) {
-        val habit = Habit(userId = userId, title = title, colorHex = colorHex, targetDaysPerWeek = targetDaysPerWeek)
+    suspend fun addHabit(
+        userId: Long,
+        title: String,
+        colorHex: String,
+        targetDaysPerWeek: Int,
+        date: String,
+        isNumerical: Boolean = false,
+        numericalGoal: Double = 0.0,
+        numericalUnit: String = "",
+        daysOfWeekPattern: String = "1111111"
+    ) {
+        val habit = Habit(
+            userId = userId,
+            title = title,
+            colorHex = colorHex,
+            targetDaysPerWeek = targetDaysPerWeek,
+            isNumerical = isNumerical,
+            numericalGoal = numericalGoal,
+            numericalUnit = numericalUnit,
+            daysOfWeekPattern = daysOfWeekPattern
+        )
         habitDao.insertHabit(habit)
         validateIndex(userId, date)
         triggerSync()
@@ -105,12 +124,12 @@ class HabitRepository(
     fun getAllCompletionsForUser(userId: Long): Flow<List<HabitCompletion>> =
         habitDao.getAllCompletionsForUser(userId)
 
-    suspend fun completeHabitWithNote(userId: Long, habitId: Long, date: String, notes: String?) {
+    suspend fun completeHabitWithNote(userId: Long, habitId: Long, date: String, notes: String?, value: Double = 0.0) {
         val existing = habitDao.getCompletion(habitId, date)
         if (existing != null) {
-            habitDao.updateCompletion(existing.copy(notes = notes))
+            habitDao.updateCompletion(existing.copy(notes = notes, value = value))
         } else {
-            habitDao.insertCompletion(HabitCompletion(habitId = habitId, date = date, notes = notes))
+            habitDao.insertCompletion(HabitCompletion(habitId = habitId, date = date, notes = notes, value = value))
         }
         validateIndex(userId, date)
         triggerSync()
@@ -122,6 +141,20 @@ class HabitRepository(
             habitDao.updateCompletion(completion.copy(notes = notes))
         }
         triggerSync()
+    }
+
+    fun getAllFocusSessions(userId: Long): Flow<List<FocusSession>> =
+        habitDao.getAllFocusSessions(userId)
+
+    suspend fun logFocusSession(userId: Long, habitId: Long?, durationSeconds: Int, details: String?) {
+        habitDao.insertFocusSession(
+            FocusSession(
+                userId = userId,
+                habitId = habitId,
+                durationSeconds = durationSeconds,
+                details = details
+            )
+        )
     }
 
     /** Triggers a background sync if SyncManager is available */

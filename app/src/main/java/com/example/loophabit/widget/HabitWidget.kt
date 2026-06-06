@@ -98,54 +98,81 @@ class HabitWidget : GlanceAppWidget() {
                     Color(0xFF8338EC)
                 }
 
-                Box(
+                Row(
                     modifier = GlanceModifier
                         .fillMaxSize()
                         .background(ColorProvider(Color(0xFF1E1E1E)))
                         .cornerRadius(24.dp)
-                        .clickable(actionStartActivity(intent))
                         .padding(16.dp),
-                    contentAlignment = Alignment.CenterStart
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        modifier = GlanceModifier.fillMaxSize(),
-                        verticalAlignment = Alignment.CenterVertically
+                    Box(
+                        modifier = GlanceModifier
+                            .defaultWeight()
+                            .clickable(actionStartActivity(intent))
                     ) {
-                        Row(
+                        Column(
+                            modifier = GlanceModifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = GlanceModifier
-                                    .size(10.dp)
-                                    .background(ColorProvider(parsedColor))
-                                    .cornerRadius(5.dp)
-                            ) {}
-                            Spacer(modifier = GlanceModifier.width(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = GlanceModifier
+                                        .size(10.dp)
+                                        .background(ColorProvider(parsedColor))
+                                        .cornerRadius(5.dp)
+                                ) {}
+                                Spacer(modifier = GlanceModifier.width(8.dp))
+                                Text(
+                                    text = "⚡ FOCUS MODE",
+                                    style = TextStyle(
+                                        color = ColorProvider(Color(0xFF8338EC)),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
+                            Spacer(modifier = GlanceModifier.height(6.dp))
                             Text(
-                                text = "⚡ FOCUS MODE",
+                                text = activeHabit.title,
                                 style = TextStyle(
-                                    color = ColorProvider(Color(0xFF8338EC)),
+                                    color = ColorProvider(Color.White),
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
+                                    fontSize = 15.sp
+                                ),
+                                maxLines = 1
+                            )
+                            Spacer(modifier = GlanceModifier.height(4.dp))
+                            Text(
+                                text = "Tap to open app & focus",
+                                style = TextStyle(
+                                    color = ColorProvider(Color.Gray),
+                                    fontSize = 10.sp
                                 )
                             )
                         }
-                        Spacer(modifier = GlanceModifier.height(8.dp))
+                    }
+                    
+                    Spacer(modifier = GlanceModifier.width(8.dp))
+
+                    Box(
+                        modifier = GlanceModifier
+                            .size(36.dp)
+                            .background(ColorProvider(parsedColor.copy(alpha = 0.2f)))
+                            .cornerRadius(18.dp)
+                            .clickable(actionRunCallback<CompleteHabitAction>(
+                                actionParametersOf(CompleteHabitAction.HabitIdKey to activeHabit.id)
+                            )),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = activeHabit.title,
+                            text = "✓",
                             style = TextStyle(
-                                color = ColorProvider(Color.White),
+                                color = ColorProvider(parsedColor),
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            ),
-                            maxLines = 2
-                        )
-                        Spacer(modifier = GlanceModifier.height(6.dp))
-                        Text(
-                            text = "Tap to focus and complete",
-                            style = TextStyle(
-                                color = ColorProvider(Color.Gray),
-                                fontSize = 11.sp
+                                fontSize = 18.sp
                             )
                         )
                     }

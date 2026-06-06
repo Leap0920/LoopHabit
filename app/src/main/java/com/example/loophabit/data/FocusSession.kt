@@ -6,28 +6,31 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
-    tableName = "habits",
+    tableName = "focus_sessions",
     foreignKeys = [
         ForeignKey(
             entity = User::class,
             parentColumns = ["id"],
             childColumns = ["userId"],
             onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = Habit::class,
+            parentColumns = ["id"],
+            childColumns = ["habitId"],
+            onDelete = ForeignKey.SET_NULL
         )
     ],
     indices = [
-        Index(value = ["userId"])
+        Index(value = ["userId"]),
+        Index(value = ["habitId"])
     ]
 )
-data class Habit(
+data class FocusSession(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val userId: Long,
-    val title: String,
-    val colorHex: String,
-    val createdAt: Long = System.currentTimeMillis(),
-    val targetDaysPerWeek: Int = 7,
-    val isNumerical: Boolean = false,
-    val numericalGoal: Double = 0.0,
-    val numericalUnit: String = "",
-    val daysOfWeekPattern: String = "1111111"
+    val habitId: Long?,
+    val durationSeconds: Int,
+    val details: String?,
+    val timestamp: Long = System.currentTimeMillis()
 )

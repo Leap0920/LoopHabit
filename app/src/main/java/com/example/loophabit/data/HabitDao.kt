@@ -55,4 +55,10 @@ interface HabitDao {
 
     @Query("SELECT hc.* FROM habit_completions hc INNER JOIN habits h ON hc.habitId = h.id WHERE h.userId = :userId")
     fun getAllCompletionsForUser(userId: Long): Flow<List<HabitCompletion>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFocusSession(session: FocusSession): Long
+
+    @Query("SELECT * FROM focus_sessions WHERE userId = :userId ORDER BY timestamp DESC")
+    fun getAllFocusSessions(userId: Long): Flow<List<FocusSession>>
 }
