@@ -2,11 +2,16 @@ package com.example.loophabit.data.supabase
 
 import android.content.Context
 import com.example.loophabit.data.sync.AuthStateProvider
+import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.status.SessionStatus
+import io.github.jan.supabase.auth.user.UserInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Repository wrapper for Supabase Authentication operations.
@@ -47,27 +52,28 @@ class AuthRepository private constructor(
         data class Error(val message: String) : AuthState
     }
 
-    /** Listen to auth state changes and update flows. */
+    /** Listen to auth state changes via sessionStatus StateFlow and update flows. */
     private fun listenToAuthChanges() {
         CoroutineScope(Dispatchers.IO).launch {
-            SupabaseClient.instance.auth.onAuthStateChange.listen { event ->
-                when (event.event) {
-                    "SIGNED_IN" -> {
-                        val user = event.session?.user
-                        _currentUser.value = user
-                        user?.let { _authState.value = AuthState.Authenticated(it) }
+            SupabaseClient.auth.sessionStatus.collect { status ->
+                when (status) {
+                    is SessionStatus.Authenticated -> {
+                        val user: UserInfo? = status.session.user
+                        if (user != null) {
+                            _currentUser.value = user
+                            _authState.value = AuthState.Authenticated(user)
+                        }
                     }
-                    "SIGNED_OUT" -> {
+                    is SessionStatus.NotAuthenticated -> {
                         _currentUser.value = null
                         _authState.value = AuthState.Unauthenticated(null)
                     }
-                    "USER_UPDATED" -> {
-                        val user = event.session?.user
-                        _currentUser.value = user
-                        user?.let { _authState.value = AuthState.Authenticated(it) }
+                    is SessionStatus.Initializing -> {
+                        // Still loading; keep current state
                     }
-                    "TOKEN_REFRESHED" -> { }
-                    else -> { }
+                    is SessionStatus.RefreshFailure -> {
+                        // Refresh failed; keep current state
+                    }
                 }
             }
         }
@@ -82,20 +88,22 @@ class AuthRepository private constructor(
         securityAnswer: String
     ): Result<Any> {
         return try {
-            val response = SupabaseClient.instance.auth.signUp(
-                email = email,
-                password = password,
-                data = mapOf(
-                    "username" to username,
-                    "security_question" to securityQuestion,
-                    "security_answer" to securityAnswer
-                )
-            )
-            response.user?.let { user ->
-                _currentUser.value = user
-                _authState.value = AuthState.Authenticated(user)
-                Result.success(user)
-            } ?: Result.failure(Exception("Sign up succeeded but no user returned"))
+            val response: UserInfo? = SupabaseClient.auth.signUpWith(Email) {
+                this.email = email
+                this.password = password
+                this.data = buildJsonObject {
+                    put("username", username)
+                    put("security_question", securityQuestion)
+                    put("security_answer", securityAnswer)
+                }
+            }
+            if (response != null) {
+                _currentUser.value = response
+                _authState.value = AuthState.Authenticated(response)
+                Result.success(response)
+            } else {
+                Result.failure(Exception("Sign up succeeded but no user returned"))
+            }
         } catch (e: Exception) {
             _authState.value = AuthState.Error(e.message ?: "Sign up failed")
             Result.failure(e)
@@ -105,15 +113,20 @@ class AuthRepository private constructor(
     /** Sign in with email and password. */
     suspend fun signIn(email: String, password: String): Result<Any> {
         return try {
-            val response = SupabaseClient.instance.auth.signIn(
-                email = email,
-                password = password
-            )
-            response.user?.let { user ->
+            SupabaseClient.auth.signInWith(Email) {
+                this.email = email
+                this.password = password
+            }
+            // signInWith is non-blocking; the session is published via sessionStatus.
+            // Read it back to surface a user object immediately.
+            val user = SupabaseClient.auth.currentSessionOrNull()?.user
+            if (user != null) {
                 _currentUser.value = user
                 _authState.value = AuthState.Authenticated(user)
                 Result.success(user)
-            } ?: Result.failure(Exception("Sign in succeeded but no user returned"))
+            } else {
+                Result.failure(Exception("Sign in succeeded but no user returned"))
+            }
         } catch (e: Exception) {
             _authState.value = AuthState.Error(e.message ?: "Sign in failed")
             Result.failure(e)
@@ -123,7 +136,7 @@ class AuthRepository private constructor(
     /** Sign out the current user. */
     suspend fun signOut(): Result<Unit> {
         return try {
-            SupabaseClient.instance.auth.signOut()
+            SupabaseClient.auth.signOut()
             _currentUser.value = null
             _authState.value = AuthState.Unauthenticated("Signed out")
             Result.success(Unit)
@@ -135,7 +148,7 @@ class AuthRepository private constructor(
     /** Send password reset email. */
     suspend fun resetPassword(email: String): Result<Unit> {
         return try {
-            SupabaseClient.instance.auth.resetPasswordForEmail(email)
+            SupabaseClient.auth.resetPasswordForEmail(email)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -145,9 +158,9 @@ class AuthRepository private constructor(
     /** Update user password (requires active session). */
     suspend fun updatePassword(newPassword: String): Result<Unit> {
         return try {
-            SupabaseClient.instance.auth.updateUser(
-                attributes = mapOf("password" to newPassword)
-            )
+            SupabaseClient.auth.updateUser {
+                this.password = newPassword
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -157,7 +170,7 @@ class AuthRepository private constructor(
     /** Get current session (if any). */
     suspend fun getCurrentSession(): Result<Any?> {
         return try {
-            val session = SupabaseClient.instance.auth.currentSession
+            val session = SupabaseClient.auth.currentSessionOrNull()
             Result.success(session)
         } catch (e: Exception) {
             Result.failure(e)
@@ -167,7 +180,7 @@ class AuthRepository private constructor(
     /** Get current user (from memory or session). */
     suspend fun getCurrentUser(): Result<Any?> {
         return try {
-            val session = SupabaseClient.instance.auth.currentSession
+            val session = SupabaseClient.auth.currentSessionOrNull()
             val user = session?.user ?: _currentUser.value
             Result.success(user)
         } catch (e: Exception) {
@@ -176,7 +189,7 @@ class AuthRepository private constructor(
     }
 
     /** Check if user is currently signed in. */
-    val isSignedIn: Boolean
+    override val isSignedIn: Boolean
         get() = _currentUser.value != null
 
     /** Get current user ID as UUID string (for use with profiles table). */

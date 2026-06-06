@@ -1,6 +1,7 @@
 package com.example.loophabit.data
 
 import androidx.room.*
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface UserDao {

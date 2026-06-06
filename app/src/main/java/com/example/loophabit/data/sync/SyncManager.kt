@@ -11,11 +11,12 @@ import com.example.loophabit.data.supabase.mappers.EntityDtoMapper
 import com.example.loophabit.data.supabase.mappers.HabitCompletionMapper
 import com.example.loophabit.data.supabase.mappers.HabitMapper
 import com.example.loophabit.data.supabase.mappers.UserMapper
-import io.github.jan.supabase.PostgrestException
+import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -58,7 +59,7 @@ object SupabaseSyncClientFactory {
 class RealSupabaseSyncClient : SupabaseSyncClient {
     override suspend fun upsertProfile(dto: UserDto): Result<Unit> {
         return try {
-            com.example.loophabit.data.supabase.SupabaseClient.instance.postgrest["profiles"].upsert(dto)
+            com.example.loophabit.data.supabase.SupabaseClient.postgrest["profiles"].upsert(dto)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -67,7 +68,7 @@ class RealSupabaseSyncClient : SupabaseSyncClient {
 
     override suspend fun upsertHabit(dto: HabitDto): Result<Unit> {
         return try {
-            com.example.loophabit.data.supabase.SupabaseClient.instance.postgrest["habits"].upsert(dto)
+            com.example.loophabit.data.supabase.SupabaseClient.postgrest["habits"].upsert(dto)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -76,7 +77,7 @@ class RealSupabaseSyncClient : SupabaseSyncClient {
 
     override suspend fun upsertCompletion(dto: HabitCompletionDto): Result<Unit> {
         return try {
-            com.example.loophabit.data.supabase.SupabaseClient.instance.postgrest["habit_completions"].upsert(dto)
+            com.example.loophabit.data.supabase.SupabaseClient.postgrest["habit_completions"].upsert(dto)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -85,12 +86,8 @@ class RealSupabaseSyncClient : SupabaseSyncClient {
 
     override suspend fun selectProfiles(): Result<List<UserDto>> {
         return try {
-            val response = com.example.loophabit.data.supabase.SupabaseClient.instance.postgrest["profiles"].select().execute()
-            if (response.isSuccessful) {
-                Result.success(response.decodeList<UserDto>())
-            } else {
-                Result.failure(Exception("Failed to select profiles"))
-            }
+            val list = com.example.loophabit.data.supabase.SupabaseClient.postgrest["profiles"].select().decodeList<UserDto>()
+            Result.success(list)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -98,12 +95,8 @@ class RealSupabaseSyncClient : SupabaseSyncClient {
 
     override suspend fun selectHabits(): Result<List<HabitDto>> {
         return try {
-            val response = com.example.loophabit.data.supabase.SupabaseClient.instance.postgrest["habits"].select().execute()
-            if (response.isSuccessful) {
-                Result.success(response.decodeList<HabitDto>())
-            } else {
-                Result.failure(Exception("Failed to select habits"))
-            }
+            val list = com.example.loophabit.data.supabase.SupabaseClient.postgrest["habits"].select().decodeList<HabitDto>()
+            Result.success(list)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -111,12 +104,8 @@ class RealSupabaseSyncClient : SupabaseSyncClient {
 
     override suspend fun selectCompletions(): Result<List<HabitCompletionDto>> {
         return try {
-            val response = com.example.loophabit.data.supabase.SupabaseClient.instance.postgrest["habit_completions"].select().execute()
-            if (response.isSuccessful) {
-                Result.success(response.decodeList<HabitCompletionDto>())
-            } else {
-                Result.failure(Exception("Failed to select completions"))
-            }
+            val list = com.example.loophabit.data.supabase.SupabaseClient.postgrest["habit_completions"].select().decodeList<HabitCompletionDto>()
+            Result.success(list)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -191,7 +180,7 @@ class SyncManager(
             var totalPushed = 0
 
             // Push users first (FK dependency for habits)
-            val users = database.userDao().getAllUsers()
+            val users = database.userDao().getAllUsers().first()
             for (user in users) {
                 val userDto = UserMapper.toDto(user)
                 val result = supabaseSyncClient.upsertProfile(userDto)
@@ -201,7 +190,7 @@ class SyncManager(
             }
 
             // Push habits
-            val habits = database.habitDao().getAllHabits()
+            val habits = database.habitDao().getAllHabits().first()
             for (habit in habits) {
                 val habitDto = HabitMapper.toDto(habit)
                 val result = supabaseSyncClient.upsertHabit(habitDto)
@@ -211,7 +200,7 @@ class SyncManager(
             }
 
             // Push completions
-            val completions = database.habitDao().getAllCompletions()
+            val completions = database.habitDao().getAllCompletions().first()
             for (completion in completions) {
                 val completionDto = HabitCompletionMapper.toDto(completion)
                 val result = supabaseSyncClient.upsertCompletion(completionDto)

@@ -2,6 +2,15 @@ package com.example.loophabit.data.supabase
 
 import android.content.Context
 import io.github.jan.supabase.SupabaseClient as OfficialSupabaseClient
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.auth.Auth
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.realtime.realtime
+import io.github.jan.supabase.storage.Storage
+import io.github.jan.supabase.storage.storage
 
 /**
  * Singleton wrapper for Supabase client initialization and access.
@@ -11,6 +20,54 @@ object SupabaseClient {
 
     private var client: OfficialSupabaseClient? = null
     private var isInitialized = false
+
+    /** Auth plugin for authentication operations */
+    val auth: Auth
+        get() {
+            if (!isInitialized || client == null) {
+                throw IllegalStateException(
+                    "SupabaseClient not initialized. " +
+                    "Call SupabaseClient.initialize(context) in your Application class first."
+                )
+            }
+            return client!!.auth
+        }
+
+    /** Postgrest plugin for database operations */
+    val postgrest: Postgrest
+        get() {
+            if (!isInitialized || client == null) {
+                throw IllegalStateException(
+                    "SupabaseClient not initialized. " +
+                    "Call SupabaseClient.initialize(context) in your Application class first."
+                )
+            }
+            return client!!.postgrest
+        }
+
+    /** Realtime plugin for realtime subscriptions */
+    val realtime: Realtime
+        get() {
+            if (!isInitialized || client == null) {
+                throw IllegalStateException(
+                    "SupabaseClient not initialized. " +
+                    "Call SupabaseClient.initialize(context) in your Application class first."
+                )
+            }
+            return client!!.realtime
+        }
+
+    /** Storage plugin for file storage operations */
+    val storage: Storage
+        get() {
+            if (!isInitialized || client == null) {
+                throw IllegalStateException(
+                    "SupabaseClient not initialized. " +
+                    "Call SupabaseClient.initialize(context) in your Application class first."
+                )
+            }
+            return client!!.storage
+        }
 
     /**
      * Initializes the Supabase client with configuration from BuildConfig.
@@ -34,7 +91,12 @@ object SupabaseClient {
             )
         }
 
-        client = OfficialSupabaseClient(supabaseUrl, supabaseAnonKey)
+        client = createSupabaseClient(supabaseUrl, supabaseAnonKey) {
+            install(Auth)
+            install(Postgrest)
+            install(Realtime)
+            install(Storage)
+        }
         isInitialized = true
     }
 
@@ -50,8 +112,7 @@ object SupabaseClient {
                     "Call SupabaseClient.initialize(context) in your Application class first."
                 )
             }
-            @Suppress("UNCHECKED_CAST")
-            return client as OfficialSupabaseClient
+            return client!!
         }
 
     /** Checks if the client has been initialized. */

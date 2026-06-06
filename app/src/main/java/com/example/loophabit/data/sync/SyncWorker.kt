@@ -17,7 +17,7 @@ class SyncWorker(
 
     private val syncManager by lazy {
         val app = applicationContext as com.example.loophabit.LoopHabitApp
-        SyncManager(app.database)
+        app.syncManager
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {

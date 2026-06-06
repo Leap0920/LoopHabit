@@ -8,7 +8,7 @@ import com.example.loophabit.data.supabase.AuthRepository
 import com.example.loophabit.data.supabase.SupabaseClient
 import com.example.loophabit.data.sync.AuthStateProvider
 import com.example.loophabit.data.sync.SyncManager
-import com.example.loophabit.data.sync.SyncManager.SupabaseSyncClientFactory
+import com.example.loophabit.data.sync.SupabaseSyncClientFactory
 import com.example.loophabit.data.sync.SyncScheduler
 
 class LoopHabitApp : Application() {
