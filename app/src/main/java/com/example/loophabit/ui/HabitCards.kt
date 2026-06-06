@@ -59,7 +59,7 @@ fun SwipeableCard(
     modifier: Modifier = Modifier,
     content: @Composable (Float) -> Unit
 ) {
-    val swipeOffset = remember { Animatable(0f) }
+    val swipeOffset = remember(habit.id) { Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val swipeThreshold = with(density) { 120.dp.toPx() }

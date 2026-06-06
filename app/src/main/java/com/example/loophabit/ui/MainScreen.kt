@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Card
@@ -156,7 +157,8 @@ fun MainScreen(viewModel: HabitViewModel) {
         if (currentUserId == 0L) {
             AuthScreen(viewModel = viewModel)
         } else {
-            Scaffold(
+            Box(modifier = Modifier.fillMaxSize()) {
+                Scaffold(
             topBar = {
                 TopAppBar(
                     title = {
@@ -460,5 +462,265 @@ fun MainScreen(viewModel: HabitViewModel) {
             onDismiss = { selectedHabitForDetails = null }
         )
     }
+
+    val focusHabitId by viewModel.focusHabitId.collectAsState()
+    val focusHabit = allHabits.find { it.id == focusHabitId }
+    val completedHabits by viewModel.completedHabits.collectAsState()
+    val incompleteHabits by viewModel.incompleteHabits.collectAsState()
+
+    if (focusHabit != null) {
+        val isCompleted = completedHabits.any { it.id == focusHabit.id }
+        
+        // Re-order incompleteHabits so the focused habit is at the top of the stack
+        val index = incompleteHabits.indexOfFirst { it.id == focusHabit.id }
+        val orderedIncompleteHabits = if (index != -1) {
+            incompleteHabits.subList(index, incompleteHabits.size) + incompleteHabits.subList(0, index)
+        } else {
+            incompleteHabits
+        }
+
+        FocusModeOverlay(
+            habit = focusHabit,
+            orderedIncompleteHabits = orderedIncompleteHabits,
+            isCompleted = isCompleted,
+            onDismiss = { viewModel.setFocusHabitId(null) },
+            onComplete = {
+                val nextHabit = if (incompleteHabits.size > 1) {
+                    val currentIndex = incompleteHabits.indexOfFirst { it.id == focusHabit.id }
+                    if (currentIndex != -1) {
+                        incompleteHabits[(currentIndex + 1) % incompleteHabits.size]
+                    } else {
+                        incompleteHabits.firstOrNull()
+                    }
+                } else {
+                    null
+                }
+                viewModel.completeHabit(focusHabit.id)
+                if (nextHabit != null) {
+                    viewModel.setFocusHabitId(nextHabit.id)
+                }
+            },
+            onUndo = {
+                viewModel.uncompleteHabit(focusHabit.id)
+            },
+            onSwipeLeft = {
+                val nextHabit = if (incompleteHabits.size > 1) {
+                    val currentIndex = incompleteHabits.indexOfFirst { it.id == focusHabit.id }
+                    if (currentIndex != -1) {
+                        incompleteHabits[(currentIndex + 1) % incompleteHabits.size]
+                    } else {
+                        incompleteHabits.firstOrNull()
+                    }
+                } else {
+                    null
+                }
+                if (nextHabit != null) {
+                    viewModel.setFocusHabitId(nextHabit.id)
+                }
+            }
+        )
+    }
+    }
+    }
+}
+
+@Composable
+fun FocusModeOverlay(
+    habit: Habit,
+    orderedIncompleteHabits: List<Habit>,
+    isCompleted: Boolean,
+    onDismiss: () -> Unit,
+    onComplete: () -> Unit,
+    onUndo: () -> Unit,
+    onSwipeLeft: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(100f),
+        contentAlignment = Alignment.Center
+    ) {
+        // Scrim
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.85f))
+                .clickable(
+                    onClick = onDismiss,
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                )
+        )
+
+        // Close button at top right
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 40.dp, end = 16.dp)
+        ) {
+            Icon(
+                imageVector = androidx.compose.material.icons.Icons.Default.Close,
+                contentDescription = "Close",
+                tint = Color.White
+            )
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+        ) {
+            Text(
+                text = if (isCompleted) "🎉 Completed!" else "⚡ Focus Mode",
+                color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 28.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 32.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .height(340.dp)
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = {} // Consume clicks to avoid dismissing when tapping on card area
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isCompleted) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        HabitCardContent(
+                            habit = habit,
+                            isTop = true,
+                            swipeOffset = 0f
+                        )
+                        
+                        val parsedColor = remember(habit.colorHex) {
+                            try {
+                                Color(android.graphics.Color.parseColor(habit.colorHex))
+                            } catch (e: Exception) {
+                                Color(0xFF8338EC)
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .fillMaxHeight(0.85f)
+                                .background(parsedColor.copy(alpha = 0.9f), shape = RoundedCornerShape(28.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Default.CheckCircle,
+                                    contentDescription = "Completed",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(64.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "Habit Completed!",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 20.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Your progress has been saved",
+                                    color = Color.White.copy(alpha = 0.8f),
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    val size = orderedIncompleteHabits.size
+                    for (i in 2 downTo 0) {
+                        if (i >= size) continue
+                        val cardHabit = orderedIncompleteHabits[i]
+                        val scale = 1f - (i * 0.05f)
+                        val yOffset = (i * 16).dp
+
+                        if (i == 0) {
+                            SwipeableCard(
+                                habit = cardHabit,
+                                onSwipeLeft = onSwipeLeft,
+                                onSwipeRight = onComplete,
+                                modifier = Modifier
+                                    .graphicsLayer {
+                                        this.scaleX = scale
+                                        this.scaleY = scale
+                                        this.translationY = yOffset.toPx()
+                                    }
+                                    .zIndex(3f)
+                            ) { swipeOffset ->
+                                HabitCardContent(
+                                    habit = cardHabit,
+                                    isTop = true,
+                                    swipeOffset = swipeOffset
+                                )
+                            }
+                        } else {
+                            HabitCardContent(
+                                habit = cardHabit,
+                                isTop = false,
+                                modifier = Modifier
+                                    .graphicsLayer {
+                                        this.scaleX = scale
+                                        this.scaleY = scale
+                                        this.translationY = yOffset.toPx()
+                                    }
+                                    .zIndex(3f - i)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            if (isCompleted) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = onUndo,
+                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                            contentColor = Color.White.copy(alpha = 0.7f)
+                        )
+                    ) {
+                        Text("Undo completion", fontWeight = FontWeight.Bold)
+                    }
+                    
+                    GradientButton(
+                        text = "Leave Focus Mode",
+                        onClick = onDismiss,
+                        modifier = Modifier.width(180.dp)
+                    )
+                }
+            } else {
+                Text(
+                    text = "Swipe right to complete • Swipe left to cycle\nTap background/close to exit",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 }

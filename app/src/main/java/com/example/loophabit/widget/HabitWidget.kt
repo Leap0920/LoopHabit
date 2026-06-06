@@ -7,12 +7,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -22,6 +24,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.example.loophabit.LoopHabitApp
+import com.example.loophabit.MainActivity
 import com.example.loophabit.data.Habit
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -53,14 +56,20 @@ class HabitWidget : GlanceAppWidget() {
             modifier = GlanceModifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
+            val intent = Intent(context, MainActivity::class.java).apply {
+                if (activeHabit != null) {
+                    putExtra("focus_habit_id", activeHabit.id)
+                }
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+
             if (currentUserId == 0L) {
                 Column(
                     modifier = GlanceModifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                        .height(100.dp)
+                        .fillMaxSize()
                         .background(ColorProvider(Color(0xFF1E1E1E)))
-                        .cornerRadius(16.dp)
+                        .cornerRadius(24.dp)
+                        .clickable(actionStartActivity(intent))
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -83,62 +92,45 @@ class HabitWidget : GlanceAppWidget() {
                     )
                 }
             } else if (activeHabit != null) {
-                // Background cards to represent stacking depth
-                if (size >= 3) {
-                    Box(
-                        modifier = GlanceModifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                            .padding(top = 16.dp)
-                            .height(84.dp)
-                            .background(ColorProvider(Color(0xFF2C2C2C)))
-                            .cornerRadius(16.dp)
-                    ) {}
-                }
-                if (size >= 2) {
-                    Box(
-                        modifier = GlanceModifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .padding(top = 8.dp)
-                            .height(92.dp)
-                            .background(ColorProvider(Color(0xFF383838)))
-                            .cornerRadius(16.dp)
-                    ) {}
-                }
-
-                // Foreground active habit card
                 val parsedColor = try {
                     Color(android.graphics.Color.parseColor(activeHabit.colorHex))
                 } catch (e: Exception) {
                     Color(0xFF8338EC)
                 }
 
-                Row(
+                Box(
                     modifier = GlanceModifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                        .height(100.dp)
+                        .fillMaxSize()
                         .background(ColorProvider(Color(0xFF1E1E1E)))
-                        .cornerRadius(16.dp)
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .cornerRadius(24.dp)
+                        .clickable(actionStartActivity(intent))
+                        .padding(16.dp),
+                    contentAlignment = Alignment.CenterStart
                 ) {
-                    // Accent indicator bar
-                    Box(
-                        modifier = GlanceModifier
-                            .width(6.dp)
-                            .fillMaxHeight()
-                            .background(ColorProvider(parsedColor))
-                            .cornerRadius(3.dp)
-                    ) {}
-
-                    Spacer(modifier = GlanceModifier.width(10.dp))
-
-                    // Title & Progress Count
                     Column(
-                        modifier = GlanceModifier.defaultWeight()
+                        modifier = GlanceModifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = GlanceModifier
+                                    .size(10.dp)
+                                    .background(ColorProvider(parsedColor))
+                                    .cornerRadius(5.dp)
+                            ) {}
+                            Spacer(modifier = GlanceModifier.width(8.dp))
+                            Text(
+                                text = "⚡ FOCUS MODE",
+                                style = TextStyle(
+                                    color = ColorProvider(Color(0xFF8338EC)),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
+                            )
+                        }
+                        Spacer(modifier = GlanceModifier.height(8.dp))
                         Text(
                             text = activeHabit.title,
                             style = TextStyle(
@@ -148,105 +140,23 @@ class HabitWidget : GlanceAppWidget() {
                             ),
                             maxLines = 2
                         )
-                        Spacer(modifier = GlanceModifier.height(4.dp))
+                        Spacer(modifier = GlanceModifier.height(6.dp))
                         Text(
-                            text = "Card ${activeIndex + 1} of $size",
+                            text = "Tap to focus and complete",
                             style = TextStyle(
                                 color = ColorProvider(Color.Gray),
                                 fontSize = 11.sp
                             )
                         )
                     }
-
-                    Spacer(modifier = GlanceModifier.width(6.dp))
-
-                    // Action buttons
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Previous Arrow
-                        Box(
-                            modifier = GlanceModifier
-                                .size(28.dp)
-                                .background(ColorProvider(Color(0xFF2E2E2E)))
-                                .cornerRadius(14.dp)
-                                .clickable(
-                                    actionRunCallback<CycleIndexAction>(
-                                        actionParametersOf(CycleIndexAction.DirectionKey to -1)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "‹",
-                                style = TextStyle(
-                                    color = ColorProvider(Color.White),
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-
-                        Spacer(modifier = GlanceModifier.width(4.dp))
-
-                        // Next Arrow
-                        Box(
-                            modifier = GlanceModifier
-                                .size(28.dp)
-                                .background(ColorProvider(Color(0xFF2E2E2E)))
-                                .cornerRadius(14.dp)
-                                .clickable(
-                                    actionRunCallback<CycleIndexAction>(
-                                        actionParametersOf(CycleIndexAction.DirectionKey to 1)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "›",
-                                style = TextStyle(
-                                    color = ColorProvider(Color.White),
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-
-                        Spacer(modifier = GlanceModifier.width(8.dp))
-
-                        // Check/Complete Button
-                        Box(
-                            modifier = GlanceModifier
-                                .size(36.dp)
-                                .background(ColorProvider(parsedColor))
-                                .cornerRadius(18.dp)
-                                .clickable(
-                                    actionRunCallback<CompleteHabitAction>(
-                                        actionParametersOf(CompleteHabitAction.HabitIdKey to activeHabit.id)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "✓",
-                                style = TextStyle(
-                                    color = ColorProvider(Color.White),
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-                    }
                 }
             } else {
-                // Empty State when all habits are complete
                 Column(
                     modifier = GlanceModifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                        .height(100.dp)
+                        .fillMaxSize()
                         .background(ColorProvider(Color(0xFF1E1E1E)))
-                        .cornerRadius(16.dp)
+                        .cornerRadius(24.dp)
+                        .clickable(actionStartActivity(intent))
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalAlignment = Alignment.CenterHorizontally
