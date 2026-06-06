@@ -28,10 +28,13 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,6 +54,9 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun AuthScreen(viewModel: HabitViewModel) {
     var mode by remember { mutableStateOf("LOGIN") } // LOGIN, REGISTER, FORGOT
+
+    var passwordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
 
     var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -194,9 +201,16 @@ fun AuthScreen(viewModel: HabitViewModel) {
                             onValueChange = { password = it; errorMsg = "" },
                             label = { Text("Password") },
                             leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Lock") },
+                            trailingIcon = {
+                                val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                                val description = if (passwordVisible) "Hide password" else "Show password"
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(imageVector = image, contentDescription = description)
+                                }
+                            },
                             singleLine = true,
                             shape = CircleShape,
-                            visualTransformation = PasswordVisualTransformation(),
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             colors = textFieldColors,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -229,6 +243,8 @@ fun AuthScreen(viewModel: HabitViewModel) {
                                     errorMsg = ""
                                     successMsg = ""
                                     password = ""
+                                    passwordVisible = false
+                                    confirmPasswordVisible = false
                                 }
                             )
                             Text(
@@ -242,6 +258,8 @@ fun AuthScreen(viewModel: HabitViewModel) {
                                     errorMsg = ""
                                     successMsg = ""
                                     password = ""
+                                    passwordVisible = false
+                                    confirmPasswordVisible = false
                                 }
                             )
                         }
@@ -279,9 +297,16 @@ fun AuthScreen(viewModel: HabitViewModel) {
                             onValueChange = { password = it; errorMsg = "" },
                             label = { Text("Password") },
                             leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Lock") },
+                            trailingIcon = {
+                                val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                                val description = if (passwordVisible) "Hide password" else "Show password"
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(imageVector = image, contentDescription = description)
+                                }
+                            },
                             singleLine = true,
                             shape = CircleShape,
-                            visualTransformation = PasswordVisualTransformation(),
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             colors = textFieldColors,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -362,6 +387,8 @@ fun AuthScreen(viewModel: HabitViewModel) {
                                 mode = "LOGIN"
                                 errorMsg = ""
                                 successMsg = ""
+                                passwordVisible = false
+                                confirmPasswordVisible = false
                             }
                         )
                     }
@@ -429,9 +456,16 @@ fun AuthScreen(viewModel: HabitViewModel) {
                                 onValueChange = { password = it; errorMsg = "" },
                                 label = { Text("New Password") },
                                 leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Lock") },
+                                trailingIcon = {
+                                    val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                                    val description = if (passwordVisible) "Hide password" else "Show password"
+                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                        Icon(imageVector = image, contentDescription = description)
+                                    }
+                                },
                                 singleLine = true,
                                 shape = CircleShape,
-                                visualTransformation = PasswordVisualTransformation(),
+                                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                 colors = textFieldColors,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -443,9 +477,16 @@ fun AuthScreen(viewModel: HabitViewModel) {
                                 onValueChange = { confirmPassword = it; errorMsg = "" },
                                 label = { Text("Confirm New Password") },
                                 leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Lock") },
+                                trailingIcon = {
+                                    val image = if (confirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                                    val description = if (confirmPasswordVisible) "Hide password" else "Show password"
+                                    IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                                        Icon(imageVector = image, contentDescription = description)
+                                    }
+                                },
                                 singleLine = true,
                                 shape = CircleShape,
-                                visualTransformation = PasswordVisualTransformation(),
+                                visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                 colors = textFieldColors,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -468,6 +509,8 @@ fun AuthScreen(viewModel: HabitViewModel) {
                                             securityAnswer = ""
                                             password = ""
                                             confirmPassword = ""
+                                            passwordVisible = false
+                                            confirmPasswordVisible = false
                                         },
                                         onError = { errorMsg = it }
                                     )
@@ -486,6 +529,8 @@ fun AuthScreen(viewModel: HabitViewModel) {
                                 mode = "LOGIN"
                                 errorMsg = ""
                                 successMsg = ""
+                                passwordVisible = false
+                                confirmPasswordVisible = false
                             }
                         )
                     }

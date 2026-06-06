@@ -1,11 +1,17 @@
 package com.example.loophabit.ui
 
+import androidx.compose.animation.*
+
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.res.painterResource
+import com.example.loophabit.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -140,9 +146,11 @@ fun MainScreen(viewModel: HabitViewModel) {
     val app = (LocalContext.current.applicationContext as com.example.loophabit.LoopHabitApp)
     val darkModeEnabled by app.preferences.darkModeEnabledFlow.collectAsState(initial = false)
 
+    val scrollState = rememberScrollState()
     var activeTab by remember { mutableStateOf("TODAY") } // TODAY, INSIGHTS
     var showAddDialog by remember { mutableStateOf(false) }
     var showManageDialog by remember { mutableStateOf(false) }
+    var showLogoutConfirmation by remember { mutableStateOf(false) }
     var selectedHabitForDetails by remember { mutableStateOf<Habit?>(null) }
 
     val totalHabitsCount = incompleteHabits.size + completedHabits.size
@@ -162,12 +170,22 @@ fun MainScreen(viewModel: HabitViewModel) {
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(
-                            text = "LoopHabit",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 24.sp,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.logo2),
+                                contentDescription = "LoopHabit Logo",
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Text(
+                                text = "LoopHabit",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 24.sp,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
                     },
                     actions = {
                         // Sync Status Indicator
@@ -175,7 +193,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                         TextButton(onClick = { showManageDialog = true }) {
                             Text("Manage", fontWeight = FontWeight.Bold)
                         }
-                        IconButton(onClick = { viewModel.logout() }) {
+                        IconButton(onClick = { showLogoutConfirmation = true }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                                 contentDescription = "Logout",
@@ -209,13 +227,19 @@ fun MainScreen(viewModel: HabitViewModel) {
             },
             floatingActionButton = {
                 if (activeTab == "TODAY") {
-                    FloatingActionButton(
-                        onClick = { showAddDialog = true },
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        shape = CircleShape
+                    AnimatedVisibility(
+                        visible = scrollState.value == 0,
+                        enter = fadeIn() + scaleIn(),
+                        exit = fadeOut() + scaleOut()
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Habit")
+                        FloatingActionButton(
+                            onClick = { showAddDialog = true },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            shape = CircleShape
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Habit")
+                        }
                     }
                 }
             },
@@ -230,6 +254,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
+                            .verticalScroll(scrollState)
                             .padding(horizontal = 20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
@@ -402,22 +427,24 @@ fun MainScreen(viewModel: HabitViewModel) {
                                 textAlign = TextAlign.Start
                             )
                             Spacer(modifier = Modifier.height(10.dp))
-                            LazyColumn(
+                            Column(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(1f)
+                                    .animateContentSize()
                             ) {
-                                items(completedHabits) { habit ->
+                                completedHabits.forEach { habit ->
                                     CompletedHabitRow(
                                         habit = habit,
                                         onUncomplete = { viewModel.uncompleteHabit(habit.id) }
                                     )
                                 }
                             }
-                        } else {
-                            Spacer(modifier = Modifier.weight(1f))
+                            Spacer(modifier = Modifier.height(20.dp))
                         }
+
+                        // Bottom Spacer to prevent overlap with FAB
+                        Spacer(modifier = Modifier.height(80.dp))
                     }
                 } else {
                     InsightsDashboard(
@@ -460,6 +487,29 @@ fun MainScreen(viewModel: HabitViewModel) {
             habit = selectedHabitForDetails!!,
             viewModel = viewModel,
             onDismiss = { selectedHabitForDetails = null }
+        )
+    }
+
+    if (showLogoutConfirmation) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showLogoutConfirmation = false },
+            title = { Text("Log Out", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to log out?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutConfirmation = false
+                        viewModel.logout()
+                    }
+                ) {
+                    Text("Log Out", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 
