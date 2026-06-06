@@ -92,6 +92,7 @@ object SupabaseClient {
         }
 
         client = createSupabaseClient(supabaseUrl, supabaseAnonKey) {
+            httpEngine = io.ktor.client.engine.okhttp.OkHttp.create()
             install(Auth)
             install(Postgrest)
             install(Realtime)

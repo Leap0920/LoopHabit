@@ -79,6 +79,7 @@ dependencies {
     implementation(libs.supabase.realtime)
     implementation(libs.supabase.storage)
     implementation(libs.supabase.core)  // Unified client
+    implementation(libs.ktor.client.okhttp)  // HTTP engine (required by Ktor/Supabase)
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)

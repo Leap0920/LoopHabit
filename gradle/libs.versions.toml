@@ -16,6 +16,7 @@ supabaseBom = "3.5.0"
 serialization = "1.8.0"
 gson = "2.11.0"
 workManager = "2.9.0"
+ktor = "3.4.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -49,6 +50,9 @@ supabase-realtime = { group = "io.github.jan-tennert.supabase", name = "realtime
 supabase-storage = { group = "io.github.jan-tennert.supabase", name = "storage-kt" }
 supabase-functions = { group = "io.github.jan-tennert.supabase", name = "functions-kt" }
 supabase-core = { group = "io.github.jan-tennert.supabase", name = "supabase-kt" }
+
+# Ktor (HTTP client engine for Supabase)
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
 
 # Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
