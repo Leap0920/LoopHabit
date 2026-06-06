@@ -14,6 +14,8 @@ glance = "1.1.1"
 ksp = "2.2.10-2.0.2"
 supabaseBom = "3.5.0"
 serialization = "1.8.0"
+gson = "2.11.0"
+workManager = "2.9.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,10 +48,16 @@ supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
 supabase-realtime = { group = "io.github.jan-tennert.supabase", name = "realtime-kt" }
 supabase-storage = { group = "io.github.jan-tennert.supabase", name = "storage-kt" }
 supabase-functions = { group = "io.github.jan-tennert.supabase", name = "functions-kt" }
+supabase-core = { group = "io.github.jan-tennert.supabase", name = "supabase-kt" }
 
 # Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-serialization-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-core", version.ref = "serialization" }
+gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+
+# WorkManager
+androidx-work-runtime = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
+androidx-work-rxjava3 = { group = "androidx.work", name = "work-rxjava3", version.ref = "workManager" }
 
 
 [plugins]

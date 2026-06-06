@@ -1,15 +1,24 @@
 package com.example.loophabit.data
 
+import com.example.loophabit.data.sync.SyncManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class HabitRepository(
     private val habitDao: HabitDao,
     private val userDao: UserDao,
-    private val loopPreferences: LoopPreferences
+    private val loopPreferences: LoopPreferences,
+    private val syncManager: SyncManager? = null
 ) {
     val loopIndexFlow: Flow<Int> = loopPreferences.loopIndexFlow
     val currentUserIdFlow: Flow<Long> = loopPreferences.currentUserIdFlow
+
+    // Sync state exposed to UI
+    val syncState: Flow<com.example.loophabit.data.sync.SyncState> = syncManager?.syncState ?: MutableStateFlow(com.example.loophabit.data.sync.SyncState.Idle).asStateFlow()
 
     fun getAllHabits(userId: Long): Flow<List<Habit>> = habitDao.getAllHabits(userId)
 
@@ -23,21 +32,25 @@ class HabitRepository(
         val habit = Habit(userId = userId, title = title, colorHex = colorHex, targetDaysPerWeek = targetDaysPerWeek)
         habitDao.insertHabit(habit)
         validateIndex(userId, date)
+        triggerSync()
     }
 
     suspend fun deleteHabit(habit: Habit, date: String) {
         habitDao.deleteHabit(habit)
         validateIndex(habit.userId, date)
+        triggerSync()
     }
 
     suspend fun completeHabit(userId: Long, habitId: Long, date: String) {
         habitDao.insertCompletion(HabitCompletion(habitId = habitId, date = date))
         validateIndex(userId, date)
+        triggerSync()
     }
 
     suspend fun uncompleteHabit(userId: Long, habitId: Long, date: String) {
         habitDao.deleteCompletion(habitId, date)
         validateIndex(userId, date)
+        triggerSync()
     }
 
     suspend fun cycleIndex(userId: Long, direction: Int, date: String) {
@@ -50,10 +63,12 @@ class HabitRepository(
         val currentIndex = loopPreferences.loopIndexFlow.first()
         val nextIndex = ((currentIndex + direction) % size + size) % size
         loopPreferences.setLoopIndex(nextIndex)
+        triggerSync()
     }
 
     suspend fun setLoopIndex(index: Int) {
         loopPreferences.setLoopIndex(index)
+        triggerSync()
     }
 
     suspend fun validateIndex(userId: Long, date: String) {
@@ -78,6 +93,7 @@ class HabitRepository(
 
     suspend fun setCurrentUserId(userId: Long) {
         loopPreferences.setCurrentUserId(userId)
+        triggerSync()
     }
 
     fun getCompletionDates(habitId: Long): Flow<List<String>> = habitDao.getCompletionDates(habitId)
@@ -96,6 +112,7 @@ class HabitRepository(
             habitDao.insertCompletion(HabitCompletion(habitId = habitId, date = date, notes = notes))
         }
         validateIndex(userId, date)
+        triggerSync()
     }
 
     suspend fun updateCompletionNotes(habitId: Long, date: String, notes: String?) {
@@ -103,6 +120,15 @@ class HabitRepository(
         if (completion != null) {
             habitDao.updateCompletion(completion.copy(notes = notes))
         }
+        triggerSync()
+    }
+
+    /** Triggers a background sync if SyncManager is available */
+    private fun triggerSync() {
+        syncManager?.let { manager ->
+            CoroutineScope(Dispatchers.IO).launch {
+                manager.fullSync()
+            }
+        }
     }
 }
-

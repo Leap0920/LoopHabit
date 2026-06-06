@@ -8,6 +8,9 @@ interface HabitDao {
     @Query("SELECT * FROM habits WHERE userId = :userId ORDER BY createdAt ASC")
     fun getAllHabits(userId: Long): Flow<List<Habit>>
 
+    @Query("SELECT * FROM habits")
+    fun getAllHabits(): Flow<List<Habit>>
+
     @Query("SELECT * FROM habits WHERE userId = :userId AND id NOT IN (SELECT habitId FROM habit_completions WHERE date = :date) ORDER BY createdAt ASC")
     fun getIncompleteHabits(userId: Long, date: String): Flow<List<Habit>>
 
@@ -17,11 +20,17 @@ interface HabitDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHabit(habit: Habit): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertHabit(habit: Habit): Long
+
     @Delete
     suspend fun deleteHabit(habit: Habit): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCompletion(completion: HabitCompletion): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCompletion(completion: HabitCompletion): Long
 
     @Query("DELETE FROM habit_completions WHERE habitId = :habitId AND date = :date")
     suspend fun deleteCompletion(habitId: Long, date: String): Int
@@ -40,6 +49,9 @@ interface HabitDao {
 
     @Query("SELECT * FROM habit_completions WHERE habitId = :habitId ORDER BY date ASC")
     fun getCompletionsForHabit(habitId: Long): Flow<List<HabitCompletion>>
+
+    @Query("SELECT * FROM habit_completions")
+    fun getAllCompletions(): Flow<List<HabitCompletion>>
 
     @Query("SELECT hc.* FROM habit_completions hc INNER JOIN habits h ON hc.habitId = h.id WHERE h.userId = :userId")
     fun getAllCompletionsForUser(userId: Long): Flow<List<HabitCompletion>>

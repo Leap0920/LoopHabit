@@ -6,9 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.loophabit.data.Habit
 import com.example.loophabit.data.HabitRepository
 import com.example.loophabit.data.User
+import com.example.loophabit.data.sync.SyncManager
+import com.example.loophabit.data.sync.SyncState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -19,7 +23,10 @@ import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
+class HabitViewModel(
+    private val repository: HabitRepository,
+    private val syncManager: SyncManager
+) : ViewModel() {
 
     val todayDate: String
         get() = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -63,11 +70,16 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
         habits[safeIndex]
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    // Sync state exposed to UI
+    val syncState: StateFlow<SyncState> = syncManager.syncState
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SyncState.Idle)
+
     fun addHabit(title: String, colorHex: String, targetDaysPerWeek: Int = 7) {
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.addHabit(userId, title, colorHex, targetDaysPerWeek, todayDate)
+                triggerSync()
             }
         }
     }
@@ -75,6 +87,7 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
     fun deleteHabit(habit: Habit) {
         viewModelScope.launch {
             repository.deleteHabit(habit, todayDate)
+            triggerSync()
         }
     }
 
@@ -83,6 +96,7 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.completeHabit(userId, habitId, todayDate)
+                triggerSync()
             }
         }
     }
@@ -92,6 +106,7 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.uncompleteHabit(userId, habitId, todayDate)
+                triggerSync()
             }
         }
     }
@@ -101,6 +116,7 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.cycleIndex(userId, 1, todayDate)
+                triggerSync()
             }
         }
     }
@@ -110,6 +126,7 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.cycleIndex(userId, -1, todayDate)
+                triggerSync()
             }
         }
     }
@@ -117,6 +134,14 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
     fun setIndex(index: Int) {
         viewModelScope.launch {
             repository.setLoopIndex(index)
+            triggerSync()
+        }
+    }
+
+    // Trigger background sync after data changes
+    private fun triggerSync() {
+        viewModelScope.launch {
+            syncManager.fullSync()
         }
     }
 
@@ -138,6 +163,7 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
             } else {
                 repository.setCurrentUserId(user.id)
                 onSuccess()
+                triggerSync()
             }
         }
     }
@@ -182,6 +208,7 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
             if (insertedId > 0) {
                 repository.setCurrentUserId(insertedId)
                 onSuccess()
+                triggerSync()
             } else {
                 onError("Registration failed. Please try again.")
             }
@@ -238,6 +265,7 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
         viewModelScope.launch {
             repository.setCurrentUserId(0L)
             repository.setLoopIndex(0)
+            triggerSync()
         }
     }
 
@@ -322,11 +350,14 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
     }
 }
 
-class HabitViewModelFactory(private val repository: HabitRepository) : ViewModelProvider.Factory {
+class HabitViewModelFactory(
+    private val repository: HabitRepository,
+    private val syncManager: SyncManager
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(HabitViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return HabitViewModel(repository) as T
+            return HabitViewModel(repository, syncManager) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

@@ -8,22 +8,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import java.util.Locale
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.List
@@ -58,10 +57,12 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import com.example.loophabit.data.Habit
 import com.example.loophabit.data.HabitCompletion
+import com.example.loophabit.data.sync.SyncState
+import com.example.loophabit.loopPreferences  // Needed for dark mode
+import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
-
 // Curated pastel/vibrant HSL colors for premium aesthetic
 val ColorPaletteList = listOf(
     "#EF476F", // Soft Red/Rose
@@ -103,6 +104,45 @@ fun GradientButton(
     }
 }
 
+@Composable
+fun SyncStatusIndicator(syncState: com.example.loophabit.data.sync.SyncState) {
+    val color: androidx.compose.ui.graphics.Color
+    val tooltip: String
+
+    when (syncState) {
+        is SyncState.Syncing -> {
+            color = MaterialTheme.colorScheme.primary
+            tooltip = "Syncing..."
+        }
+        is SyncState.Completed -> {
+            color = MaterialTheme.colorScheme.tertiary
+            tooltip = "Synced"
+        }
+        is SyncState.Error -> {
+            color = MaterialTheme.colorScheme.error
+            tooltip = "Sync failed: ${syncState.message}"
+        }
+        SyncState.Idle -> {
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            tooltip = "Not syncing"
+        }
+    }
+
+    IconButton(
+        onClick = { },
+        modifier = Modifier
+            .size(40.dp)
+            .padding(end = 8.dp),
+        enabled = false // Visual indicator only for now
+    ) {
+        Icon(
+            imageVector = Icons.Default.CheckCircle,
+            contentDescription = tooltip,
+            tint = color
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: HabitViewModel) {
@@ -112,6 +152,11 @@ fun MainScreen(viewModel: HabitViewModel) {
     val allHabits by viewModel.allHabits.collectAsState()
     val loopIndex by viewModel.loopIndex.collectAsState()
     val currentHabit by viewModel.currentHabit.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
+
+    // Get dark mode preference
+    val app = (LocalContext.current.applicationContext as com.example.loophabit.LoopHabitApp)
+    val darkModeEnabled by app.preferences.darkModeEnabledFlow.collectAsState()
 
     var activeTab by remember { mutableStateOf("TODAY") } // TODAY, INSIGHTS
     var showAddDialog by remember { mutableStateOf(false) }
@@ -125,10 +170,12 @@ fun MainScreen(viewModel: HabitViewModel) {
         0f
     }
 
-    if (currentUserId == 0L) {
-        AuthScreen(viewModel = viewModel)
-    } else {
-        Scaffold(
+    // Wrap with theme based on user preference
+    LoopHabitTheme(darkTheme = darkModeEnabled) {
+        if (currentUserId == 0L) {
+            AuthScreen(viewModel = viewModel)
+        } else {
+            Scaffold(
             topBar = {
                 TopAppBar(
                     title = {
@@ -140,6 +187,8 @@ fun MainScreen(viewModel: HabitViewModel) {
                         )
                     },
                     actions = {
+                        // Sync Status Indicator
+                        SyncStatusIndicator(syncState = syncState)
                         TextButton(onClick = { showManageDialog = true }) {
                             Text("Manage", fontWeight = FontWeight.Bold)
                         }
@@ -418,7 +467,8 @@ fun MainScreen(viewModel: HabitViewModel) {
             },
             onSelectHabit = { habit ->
                 selectedHabitForDetails = habit
-            }
+            },
+            app = app
         )
     }
 
@@ -835,8 +885,10 @@ fun ManageHabitsDialog(
     habits: List<Habit>,
     onDismiss: () -> Unit,
     onDelete: (Habit) -> Unit,
-    onSelectHabit: (Habit) -> Unit
+    onSelectHabit: (Habit) -> Unit,
+    app: com.example.loophabit.LoopHabitApp
 ) {
+    val darkModeEnabled by app.preferences.darkModeEnabledFlow.collectAsState()
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp),
@@ -858,7 +910,35 @@ fun ManageHabitsDialog(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-
+                
+                // Dark Mode Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Dark Mode",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = darkModeEnabled,
+                        onCheckedChange = { enabled ->
+                            app.preferences.setDarkModeEnabled(enabled)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    )
+                }
+                
+                Divider(modifier = Modifier.padding(vertical = 16.dp))
+                
                 if (habits.isEmpty()) {
                     Box(
                         modifier = Modifier
@@ -2558,4 +2638,5 @@ fun NoteEditDialog(
             }
         }
     }
+}
 }

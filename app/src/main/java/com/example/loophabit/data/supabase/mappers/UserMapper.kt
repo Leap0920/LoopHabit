@@ -37,12 +37,14 @@ object UserMapper : EntityDtoMapper<User, UserDto> {
 
     override fun toInsertDto(entity: User): UserDto {
         val uuid = UUID.randomUUID() // New profiles get new UUID
-        return UserDto.create(
+        return UserDto(
             id = uuid,
             email = entity.email,
             username = entity.username,
             securityQuestion = entity.securityQuestion,
-            securityAnswerHash = entity.password
+            securityAnswerHash = entity.password,
+            createdAt = Instant.now(),
+            updatedAt = Instant.now()
         )
     }
 }
