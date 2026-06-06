@@ -1,6 +1,7 @@
 package com.example.loophabit.ui
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -15,14 +16,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -124,7 +125,7 @@ fun SyncStatusIndicator(syncState: SyncState) {
         enabled = false // Visual indicator only for now
     ) {
         Icon(
-            imageVector = Icons.Default.CheckCircle,
+            imageVector = Icons.Outlined.CheckCircle,
             contentDescription = tooltip,
             tint = color
         )
@@ -175,7 +176,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Image(
-                                painter = painterResource(id = R.drawable.logo2),
+                                painter = painterResource(id = if (darkModeEnabled) R.drawable.darkmode_logo else R.drawable.logo2),
                                 contentDescription = "LoopHabit Logo",
                                 modifier = Modifier.size(32.dp)
                             )
@@ -195,7 +196,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                         }
                         IconButton(onClick = { showLogoutConfirmation = true }) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
                                 contentDescription = "Logout",
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
@@ -214,13 +215,13 @@ fun MainScreen(viewModel: HabitViewModel) {
                     NavigationBarItem(
                         selected = activeTab == "TODAY",
                         onClick = { activeTab = "TODAY" },
-                        icon = { Icon(Icons.Default.Home, contentDescription = "Today") },
+                        icon = { Icon(Icons.Outlined.Home, contentDescription = "Today") },
                         label = { Text("Today", fontWeight = FontWeight.Bold) }
                     )
                     NavigationBarItem(
                         selected = activeTab == "INSIGHTS",
                         onClick = { activeTab = "INSIGHTS" },
-                        icon = { Icon(Icons.Default.DateRange, contentDescription = "Insights") },
+                        icon = { Icon(Icons.Outlined.DateRange, contentDescription = "Insights") },
                         label = { Text("Insights", fontWeight = FontWeight.Bold) }
                     )
                 }
@@ -238,7 +239,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                             contentColor = MaterialTheme.colorScheme.onPrimary,
                             shape = CircleShape
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = "Add Habit")
+                            Icon(Icons.Outlined.Add, contentDescription = "Add Habit")
                         }
                     }
                 }
@@ -250,112 +251,182 @@ fun MainScreen(viewModel: HabitViewModel) {
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                if (activeTab == "TODAY") {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(scrollState)
-                            .padding(horizontal = 20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Progress Section
-                        Card(
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                            ),
-                            modifier = Modifier.fillMaxWidth()
+                AnimatedContent(
+                    targetState = activeTab,
+                    transitionSpec = {
+                        if (targetState == "INSIGHTS") {
+                            (slideInHorizontally { width -> width } + fadeIn(animationSpec = tween(300))).togetherWith(
+                                slideOutHorizontally { width -> -width } + fadeOut(animationSpec = tween(300))
+                            )
+                        } else {
+                            (slideInHorizontally { width -> -width } + fadeIn(animationSpec = tween(300))).togetherWith(
+                                slideOutHorizontally { width -> width } + fadeOut(animationSpec = tween(300))
+                            )
+                        }
+                    },
+                    label = "tabTransition",
+                    modifier = Modifier.fillMaxSize()
+                ) { targetTab ->
+                    if (targetTab == "TODAY") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(scrollState)
+                                .padding(horizontal = 20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(20.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Progress Section
+                            Card(
+                                shape = RoundedCornerShape(24.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.weight(1.5f)) {
-                                    Text(
-                                        text = "Today's Loop",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 18.sp
-                                    )
-                                    Text(
-                                        text = if (totalHabitsCount == 0) "No habits added yet"
-                                        else "${completedHabits.size} of $totalHabitsCount completed",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 14.sp
-                                    )
-                                }
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier.weight(1f)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(20.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    CircularProgressIndicator(
-                                        progress = { completionProgress },
-                                        modifier = Modifier.size(64.dp),
-                                        strokeWidth = 6.dp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    )
-                                    Text(
-                                        text = "${(completionProgress * 100).roundToInt()}%",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
+                                    Column(modifier = Modifier.weight(1.5f)) {
+                                        Text(
+                                            text = "Today's Loop",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp
+                                        )
+                                        Text(
+                                            text = if (totalHabitsCount == 0) "No habits added yet"
+                                            else "${completedHabits.size} of $totalHabitsCount completed",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        CircularProgressIndicator(
+                                            progress = { completionProgress },
+                                            modifier = Modifier.size(64.dp),
+                                            strokeWidth = 6.dp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        )
+                                        Text(
+                                            text = "${(completionProgress * 100).roundToInt()}%",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(30.dp))
+                            Spacer(modifier = Modifier.height(30.dp))
 
-                        // The Stack
-                        if (incompleteHabits.isNotEmpty()) {
-                            val size = incompleteHabits.size
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(340.dp),
-                                contentAlignment = Alignment.Center
-                              ) {
-                                // Render back to front (max 3 layers visible)
-                                for (i in 2 downTo 0) {
-                                    if (i >= size) continue
-                                    val cardIndex = (loopIndex + i) % size
-                                    val habit = incompleteHabits[cardIndex]
-                                    val scale = 1f - (i * 0.05f)
-                                    val yOffset = (i * 16).dp
+                            // The Stack
+                            if (incompleteHabits.isNotEmpty()) {
+                                val size = incompleteHabits.size
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(340.dp),
+                                    contentAlignment = Alignment.Center
+                                  ) {
+                                    // Render back to front (max 3 layers visible)
+                                    for (i in 2 downTo 0) {
+                                        if (i >= size) continue
+                                        val cardIndex = (loopIndex + i) % size
+                                        val habit = incompleteHabits[cardIndex]
+                                        val scale = 1f - (i * 0.05f)
+                                        val yOffset = (i * 16).dp
 
-                                    if (i == 0) {
-                                        SwipeableCard(
-                                            habit = habit,
-                                            onSwipeLeft = { viewModel.nextHabit() },
-                                            onSwipeRight = { viewModel.completeHabit(habit.id) },
-                                            modifier = Modifier
-                                                .graphicsLayer {
-                                                    this.scaleX = scale
-                                                    this.scaleY = scale
-                                                    this.translationY = yOffset.toPx()
-                                                }
-                                                .zIndex(3f)
-                                        ) { swipeOffset ->
+                                        if (i == 0) {
+                                            SwipeableCard(
+                                                habit = habit,
+                                                onSwipeLeft = { viewModel.nextHabit() },
+                                                onSwipeRight = { viewModel.completeHabit(habit.id) },
+                                                modifier = Modifier
+                                                    .graphicsLayer {
+                                                        this.scaleX = scale
+                                                        this.scaleY = scale
+                                                        this.translationY = yOffset.toPx()
+                                                    }
+                                                    .zIndex(3f)
+                                            ) { swipeOffset ->
+                                                HabitCardContent(
+                                                    habit = habit,
+                                                    isTop = true,
+                                                    swipeOffset = swipeOffset
+                                                )
+                                            }
+                                        } else {
                                             HabitCardContent(
                                                 habit = habit,
-                                                isTop = true,
-                                                swipeOffset = swipeOffset
+                                                isTop = false,
+                                                modifier = Modifier
+                                                    .graphicsLayer {
+                                                        this.scaleX = scale
+                                                        this.scaleY = scale
+                                                        this.translationY = yOffset.toPx()
+                                                    }
+                                                    .zIndex(3f - i)
                                             )
                                         }
-                                    } else {
-                                        HabitCardContent(
-                                            habit = habit,
-                                            isTop = false,
-                                            modifier = Modifier
-                                                .graphicsLayer {
-                                                    this.scaleX = scale
-                                                    this.scaleY = scale
-                                                    this.translationY = yOffset.toPx()
-                                                }
-                                                .zIndex(3f - i)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(20.dp))
+
+                                // Navigation Buttons for accessibility
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = { viewModel.prevHabit() },
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, contentDescription = "Previous")
+                                    }
+
+                                    Text(
+                                        text = "Card ${(loopIndex % size) + 1} of $size",
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+
+                                    IconButton(
+                                        onClick = { viewModel.nextHabit() },
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = "Next")
+                                    }
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(340.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "🎉 All done!",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 24.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = if (totalHabitsCount == 0) "Create a habit to get started" else "You've completed all habits for today!",
+                                            textAlign = TextAlign.Center,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -363,94 +434,41 @@ fun MainScreen(viewModel: HabitViewModel) {
 
                             Spacer(modifier = Modifier.height(20.dp))
 
-                            // Navigation Buttons for accessibility
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(
-                                    onClick = { viewModel.prevHabit() },
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                                ) {
-                                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous")
-                                }
-
+                            // Completed List Section
+                            if (completedHabits.isNotEmpty()) {
                                 Text(
-                                    text = "Card ${(loopIndex % size) + 1} of $size",
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = "Completed Today",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Start
                                 )
-
-                                IconButton(
-                                    onClick = { viewModel.nextHabit() },
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
                                     modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .fillMaxWidth()
+                                        .animateContentSize()
                                 ) {
-                                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next")
+                                    completedHabits.forEach { habit ->
+                                        CompletedHabitRow(
+                                            habit = habit,
+                                            onUncomplete = { viewModel.uncompleteHabit(habit.id) }
+                                        )
+                                    }
                                 }
+                                Spacer(modifier = Modifier.height(20.dp))
                             }
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(340.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "🎉 All done!",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 24.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = if (totalHabitsCount == 0) "Create a habit to get started" else "You've completed all habits for today!",
-                                        textAlign = TextAlign.Center,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
+
+                            // Bottom Spacer to prevent overlap with FAB
+                            Spacer(modifier = Modifier.height(80.dp))
                         }
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        // Completed List Section
-                        if (completedHabits.isNotEmpty()) {
-                            Text(
-                                text = "Completed Today",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .animateContentSize()
-                            ) {
-                                completedHabits.forEach { habit ->
-                                    CompletedHabitRow(
-                                        habit = habit,
-                                        onUncomplete = { viewModel.uncompleteHabit(habit.id) }
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(20.dp))
-                        }
-
-                        // Bottom Spacer to prevent overlap with FAB
-                        Spacer(modifier = Modifier.height(80.dp))
+                    } else {
+                        InsightsDashboard(
+                            viewModel = viewModel,
+                            onSelectHabit = { habit -> selectedHabitForDetails = habit }
+                        )
                     }
-                } else {
-                    InsightsDashboard(
-                        viewModel = viewModel,
-                        onSelectHabit = { habit -> selectedHabitForDetails = habit }
-                    )
                 }
             }
         }
@@ -610,7 +628,7 @@ fun FocusModeOverlay(
                 .padding(top = 40.dp, end = 16.dp)
         ) {
             Icon(
-                imageVector = androidx.compose.material.icons.Icons.Default.Close,
+                imageVector = androidx.compose.material.icons.Icons.Outlined.Close,
                 contentDescription = "Close",
                 tint = Color.White
             )
@@ -674,7 +692,7 @@ fun FocusModeOverlay(
                                 modifier = Modifier.padding(24.dp)
                             ) {
                                 Icon(
-                                    imageVector = androidx.compose.material.icons.Icons.Default.CheckCircle,
+                                    imageVector = androidx.compose.material.icons.Icons.Outlined.CheckCircle,
                                     contentDescription = "Completed",
                                     tint = Color.White,
                                     modifier = Modifier.size(64.dp)

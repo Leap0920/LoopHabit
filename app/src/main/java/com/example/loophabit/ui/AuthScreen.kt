@@ -1,6 +1,12 @@
 package com.example.loophabit.ui
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,11 +23,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -33,27 +41,43 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.loophabit.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(viewModel: HabitViewModel) {
     var mode by remember { mutableStateOf("LOGIN") } // LOGIN, REGISTER, FORGOT
+
+    var animateEntry by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        animateEntry = true
+    }
+
+    val entryProgress by animateFloatAsState(
+        targetValue = if (animateEntry) 1f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+        label = "entryAnim"
+    )
 
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
@@ -81,18 +105,39 @@ fun AuthScreen(viewModel: HabitViewModel) {
 
     var showQuestionDropdown by remember { mutableStateOf(false) }
 
+    // Get dark mode preference reactively
+    val app = (LocalContext.current.applicationContext as com.example.loophabit.LoopHabitApp)
+    val darkModeEnabled by app.preferences.darkModeEnabledFlow.collectAsState(initial = false)
+
+    val backgroundBrush = remember(darkModeEnabled) {
+        if (darkModeEnabled) {
+            Brush.verticalGradient(
+                colors = listOf(Color(0xFF0F0C1B), Color(0xFF201335))
+            )
+        } else {
+            Brush.verticalGradient(
+                colors = listOf(Color(0xFFF9F6FF), Color(0xFFE8F0FE))
+            )
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(backgroundBrush),
         contentAlignment = Alignment.Center
     ) {
-        // Soft glowing background circles matching theme colors
+        // Soft glowing background circles matching theme colors with entry scaling
         Box(
             modifier = Modifier
                 .size(240.dp)
                 .align(Alignment.TopStart)
                 .offset(x = (-50).dp, y = (-50).dp)
+                .graphicsLayer {
+                    scaleX = entryProgress * 1.1f
+                    scaleY = entryProgress * 1.1f
+                    alpha = entryProgress * 0.7f
+                }
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape)
         )
         Box(
@@ -100,6 +145,11 @@ fun AuthScreen(viewModel: HabitViewModel) {
                 .size(300.dp)
                 .align(Alignment.BottomEnd)
                 .offset(x = 80.dp, y = 80.dp)
+                .graphicsLayer {
+                    scaleX = entryProgress * 1.2f
+                    scaleY = entryProgress * 1.2f
+                    alpha = entryProgress * 0.6f
+                }
                 .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f), CircleShape)
         )
 
@@ -112,6 +162,12 @@ fun AuthScreen(viewModel: HabitViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(20.dp)
+                .graphicsLayer {
+                    scaleX = 0.95f + (entryProgress * 0.05f)
+                    scaleY = 0.95f + (entryProgress * 0.05f)
+                    alpha = entryProgress
+                    translationY = (1f - entryProgress) * 60f
+                }
         ) {
             Column(
                 modifier = Modifier
@@ -119,10 +175,12 @@ fun AuthScreen(viewModel: HabitViewModel) {
                     .padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "♾️",
-                    fontSize = 48.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                Image(
+                    painter = painterResource(id = if (darkModeEnabled) R.drawable.darkmode_logo else R.drawable.logo2),
+                    contentDescription = "LoopHabit Logo",
+                    modifier = Modifier
+                        .size(80.dp)
+                        .padding(bottom = 8.dp)
                 )
 
                 Text(
@@ -173,366 +231,378 @@ fun AuthScreen(viewModel: HabitViewModel) {
                 }
 
                 val textFieldColors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.15f),
                     focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedLeadingIconColor = MaterialTheme.colorScheme.primary,
+                    unfocusedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
 
-                when (mode) {
-                    "LOGIN" -> {
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = { email = it; errorMsg = ""; successMsg = "" },
-                            label = { Text("Username or Email") },
-                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = "User") },
-                            singleLine = true,
-                            shape = CircleShape,
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        OutlinedTextField(
-                            value = password,
-                            onValueChange = { password = it; errorMsg = "" },
-                            label = { Text("Password") },
-                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Lock") },
-                            trailingIcon = {
-                                val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
-                                val description = if (passwordVisible) "Hide password" else "Show password"
-                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                    Icon(imageVector = image, contentDescription = description)
-                                }
-                            },
-                            singleLine = true,
-                            shape = CircleShape,
-                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        GradientButton(
-                            text = "Login",
-                            onClick = {
-                                viewModel.login(email, password,
-                                    onSuccess = { errorMsg = "" },
-                                    onError = { errorMsg = it }
+                Crossfade(
+                    targetState = mode,
+                    animationSpec = tween(durationMillis = 300),
+                    label = "authScreenCrossfade"
+                ) { targetMode ->
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        when (targetMode) {
+                            "LOGIN" -> {
+                                OutlinedTextField(
+                                    value = email,
+                                    onValueChange = { email = it; errorMsg = ""; successMsg = "" },
+                                    label = { Text("Username or Email") },
+                                    leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = "User") },
+                                    singleLine = true,
+                                    shape = CircleShape,
+                                    colors = textFieldColors,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
-                            }
-                        )
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                                Spacer(modifier = Modifier.height(14.dp))
 
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "Create Account",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.clickable {
-                                    mode = "REGISTER"
-                                    errorMsg = ""
-                                    successMsg = ""
-                                    password = ""
-                                    passwordVisible = false
-                                    confirmPasswordVisible = false
-                                }
-                            )
-                            Text(
-                                text = "Forgot Password?",
-                                color = MaterialTheme.colorScheme.secondary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.clickable {
-                                    mode = "FORGOT"
-                                    forgotStep = 1
-                                    errorMsg = ""
-                                    successMsg = ""
-                                    password = ""
-                                    passwordVisible = false
-                                    confirmPasswordVisible = false
-                                }
-                            )
-                        }
-                    }
+                                OutlinedTextField(
+                                    value = password,
+                                    onValueChange = { password = it; errorMsg = "" },
+                                    label = { Text("Password") },
+                                    leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = "Lock") },
+                                    trailingIcon = {
+                                        val image = if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff
+                                        val description = if (passwordVisible) "Hide password" else "Show password"
+                                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                            Icon(imageVector = image, contentDescription = description)
+                                        }
+                                    },
+                                    singleLine = true,
+                                    shape = CircleShape,
+                                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    colors = textFieldColors,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
 
-                    "REGISTER" -> {
-                        OutlinedTextField(
-                            value = username,
-                            onValueChange = { username = it; errorMsg = "" },
-                            label = { Text("Username") },
-                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = "User") },
-                            singleLine = true,
-                            shape = CircleShape,
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                                Spacer(modifier = Modifier.height(24.dp))
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                                GradientButton(
+                                    text = "Login",
+                                    onClick = {
+                                        viewModel.login(email, password,
+                                            onSuccess = { errorMsg = "" },
+                                            onError = { errorMsg = it }
+                                        )
+                                    }
+                                )
 
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = { email = it; errorMsg = "" },
-                            label = { Text("Email") },
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email") },
-                            singleLine = true,
-                            shape = CircleShape,
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                                Spacer(modifier = Modifier.height(20.dp))
 
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        OutlinedTextField(
-                            value = password,
-                            onValueChange = { password = it; errorMsg = "" },
-                            label = { Text("Password") },
-                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Lock") },
-                            trailingIcon = {
-                                val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
-                                val description = if (passwordVisible) "Hide password" else "Show password"
-                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                    Icon(imageVector = image, contentDescription = description)
-                                }
-                            },
-                            singleLine = true,
-                            shape = CircleShape,
-                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            OutlinedTextField(
-                                value = securityQuestion,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Security Question") },
-                                leadingIcon = { Icon(Icons.Default.Info, contentDescription = "Question") },
-                                shape = CircleShape,
-                                colors = textFieldColors,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showQuestionDropdown = true }
-                            )
-                            DropdownMenu(
-                                expanded = showQuestionDropdown,
-                                onDismissRequest = { showQuestionDropdown = false },
-                                modifier = Modifier
-                                    .fillMaxWidth(0.8f)
-                                    .background(MaterialTheme.colorScheme.surface)
-                            ) {
-                                securityQuestions.forEach { q ->
-                                    DropdownMenuItem(
-                                        text = { Text(q, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp) },
-                                        onClick = {
-                                            securityQuestion = q
-                                            showQuestionDropdown = false
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "Create Account",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.clickable {
+                                            mode = "REGISTER"
+                                            errorMsg = ""
+                                            successMsg = ""
+                                            password = ""
+                                            passwordVisible = false
+                                            confirmPasswordVisible = false
+                                        }
+                                    )
+                                    Text(
+                                        text = "Forgot Password?",
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.clickable {
+                                            mode = "FORGOT"
+                                            forgotStep = 1
+                                            errorMsg = ""
+                                            successMsg = ""
+                                            password = ""
+                                            passwordVisible = false
+                                            confirmPasswordVisible = false
                                         }
                                     )
                                 }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                            "REGISTER" -> {
+                                OutlinedTextField(
+                                    value = username,
+                                    onValueChange = { username = it; errorMsg = "" },
+                                    label = { Text("Username") },
+                                    leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = "User") },
+                                    singleLine = true,
+                                    shape = CircleShape,
+                                    colors = textFieldColors,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
 
-                        OutlinedTextField(
-                            value = securityAnswer,
-                            onValueChange = { securityAnswer = it; errorMsg = "" },
-                            label = { Text("Your Answer") },
-                            leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = "Answer") },
-                            singleLine = true,
-                            shape = CircleShape,
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                                Spacer(modifier = Modifier.height(10.dp))
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                                OutlinedTextField(
+                                    value = email,
+                                    onValueChange = { email = it; errorMsg = "" },
+                                    label = { Text("Email") },
+                                    leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = "Email") },
+                                    singleLine = true,
+                                    shape = CircleShape,
+                                    colors = textFieldColors,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
 
-                        GradientButton(
-                            text = "Create Account",
-                            colors = listOf(Color(0xFF06D6A0), Color(0xFF118AB2)),
-                            onClick = {
-                                viewModel.register(username, email, password, securityQuestion, securityAnswer,
-                                    onSuccess = {
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                OutlinedTextField(
+                                    value = password,
+                                    onValueChange = { password = it; errorMsg = "" },
+                                    label = { Text("Password") },
+                                    leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = "Lock") },
+                                    trailingIcon = {
+                                        val image = if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff
+                                        val description = if (passwordVisible) "Hide password" else "Show password"
+                                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                            Icon(imageVector = image, contentDescription = description)
+                                        }
+                                    },
+                                    singleLine = true,
+                                    shape = CircleShape,
+                                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    colors = textFieldColors,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = securityQuestion,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Security Question") },
+                                        leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = "Question") },
+                                        shape = CircleShape,
+                                        colors = textFieldColors,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { showQuestionDropdown = true }
+                                    )
+                                    DropdownMenu(
+                                        expanded = showQuestionDropdown,
+                                        onDismissRequest = { showQuestionDropdown = false },
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.8f)
+                                            .background(MaterialTheme.colorScheme.surface)
+                                    ) {
+                                        securityQuestions.forEach { q ->
+                                            DropdownMenuItem(
+                                                text = { Text(q, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp) },
+                                                onClick = {
+                                                    securityQuestion = q
+                                                    showQuestionDropdown = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                OutlinedTextField(
+                                    value = securityAnswer,
+                                    onValueChange = { securityAnswer = it; errorMsg = "" },
+                                    label = { Text("Your Answer") },
+                                    leadingIcon = { Icon(Icons.Outlined.CheckCircle, contentDescription = "Answer") },
+                                    singleLine = true,
+                                    shape = CircleShape,
+                                    colors = textFieldColors,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Spacer(modifier = Modifier.height(24.dp))
+
+                                GradientButton(
+                                    text = "Create Account",
+                                    colors = listOf(Color(0xFF06D6A0), Color(0xFF118AB2)),
+                                    onClick = {
+                                        viewModel.register(username, email, password, securityQuestion, securityAnswer,
+                                            onSuccess = {
+                                                errorMsg = ""
+                                                successMsg = ""
+                                            },
+                                            onError = {
+                                                errorMsg = it
+                                            }
+                                        )
+                                    }
+                                )
+
+                                Spacer(modifier = Modifier.height(20.dp))
+
+                                Text(
+                                    text = "Already have an account? Sign In",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable {
+                                        mode = "LOGIN"
                                         errorMsg = ""
                                         successMsg = ""
-                                    },
-                                    onError = {
-                                        errorMsg = it
+                                        passwordVisible = false
+                                        confirmPasswordVisible = false
                                     }
                                 )
                             }
-                        )
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                            "FORGOT" -> {
+                                if (forgotStep == 1) {
+                                    OutlinedTextField(
+                                        value = email,
+                                        onValueChange = { email = it; errorMsg = "" },
+                                        label = { Text("Registered Email") },
+                                        leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = "Email") },
+                                        singleLine = true,
+                                        shape = CircleShape,
+                                        colors = textFieldColors,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
 
-                        Text(
-                            text = "Already have an account? Sign In",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.clickable {
-                                mode = "LOGIN"
-                                errorMsg = ""
-                                successMsg = ""
-                                passwordVisible = false
-                                confirmPasswordVisible = false
-                            }
-                        )
-                    }
+                                    Spacer(modifier = Modifier.height(24.dp))
 
-                    "FORGOT" -> {
-                        if (forgotStep == 1) {
-                            OutlinedTextField(
-                                value = email,
-                                onValueChange = { email = it; errorMsg = "" },
-                                label = { Text("Registered Email") },
-                                leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email") },
-                                singleLine = true,
-                                shape = CircleShape,
-                                colors = textFieldColors,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                                    GradientButton(
+                                        text = "Find Account",
+                                        onClick = {
+                                            viewModel.getSecurityQuestion(email,
+                                                onSuccess = { q ->
+                                                    resolvedSecurityQuestion = q
+                                                    forgotStep = 2
+                                                    errorMsg = ""
+                                                },
+                                                onError = { errorMsg = it }
+                                            )
+                                        }
+                                    )
+                                } else {
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 12.dp)
+                                    ) {
+                                        Text(
+                                            text = resolvedSecurityQuestion,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(16.dp),
+                                            fontSize = 14.sp
+                                        )
+                                    }
 
-                            Spacer(modifier = Modifier.height(24.dp))
+                                    OutlinedTextField(
+                                        value = securityAnswer,
+                                        onValueChange = { securityAnswer = it; errorMsg = "" },
+                                        label = { Text("Your Answer") },
+                                        leadingIcon = { Icon(Icons.Outlined.CheckCircle, contentDescription = "Answer") },
+                                        singleLine = true,
+                                        shape = CircleShape,
+                                        colors = textFieldColors,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
 
-                            GradientButton(
-                                text = "Find Account",
-                                onClick = {
-                                    viewModel.getSecurityQuestion(email,
-                                        onSuccess = { q ->
-                                            resolvedSecurityQuestion = q
-                                            forgotStep = 2
-                                            errorMsg = ""
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    OutlinedTextField(
+                                        value = password,
+                                        onValueChange = { password = it; errorMsg = "" },
+                                        label = { Text("New Password") },
+                                        leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = "Lock") },
+                                        trailingIcon = {
+                                            val image = if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff
+                                            val description = if (passwordVisible) "Hide password" else "Show password"
+                                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                                Icon(imageVector = image, contentDescription = description)
+                                            }
                                         },
-                                        onError = { errorMsg = it }
+                                        singleLine = true,
+                                        shape = CircleShape,
+                                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                        colors = textFieldColors,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    OutlinedTextField(
+                                        value = confirmPassword,
+                                        onValueChange = { confirmPassword = it; errorMsg = "" },
+                                        label = { Text("Confirm New Password") },
+                                        leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = "Lock") },
+                                        trailingIcon = {
+                                            val image = if (confirmPasswordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff
+                                            val description = if (confirmPasswordVisible) "Hide password" else "Show password"
+                                            IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                                                Icon(imageVector = image, contentDescription = description)
+                                            }
+                                        },
+                                        singleLine = true,
+                                        shape = CircleShape,
+                                        visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                        colors = textFieldColors,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Spacer(modifier = Modifier.height(24.dp))
+
+                                    GradientButton(
+                                        text = "Reset Password",
+                                        onClick = {
+                                            if (password != confirmPassword) {
+                                                errorMsg = "Passwords do not match"
+                                                return@GradientButton
+                                            }
+                                            viewModel.resetPassword(email, securityAnswer, password,
+                                                onSuccess = {
+                                                    successMsg = "Password reset successfully! Log in."
+                                                    mode = "LOGIN"
+                                                    forgotStep = 1
+                                                    errorMsg = ""
+                                                    securityAnswer = ""
+                                                    password = ""
+                                                    confirmPassword = ""
+                                                    passwordVisible = false
+                                                    confirmPasswordVisible = false
+                                                },
+                                                onError = { errorMsg = it }
+                                            )
+                                        }
                                     )
                                 }
-                            )
-                        } else {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 12.dp)
-                            ) {
+
+                                Spacer(modifier = Modifier.height(20.dp))
+
                                 Text(
-                                    text = resolvedSecurityQuestion,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    text = "Back to Sign In",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(16.dp),
-                                    fontSize = 14.sp
+                                    modifier = Modifier.clickable {
+                                        mode = "LOGIN"
+                                        errorMsg = ""
+                                        successMsg = ""
+                                        passwordVisible = false
+                                        confirmPasswordVisible = false
+                                    }
                                 )
                             }
-
-                            OutlinedTextField(
-                                value = securityAnswer,
-                                onValueChange = { securityAnswer = it; errorMsg = "" },
-                                label = { Text("Your Answer") },
-                                leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = "Answer") },
-                                singleLine = true,
-                                shape = CircleShape,
-                                colors = textFieldColors,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            OutlinedTextField(
-                                value = password,
-                                onValueChange = { password = it; errorMsg = "" },
-                                label = { Text("New Password") },
-                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Lock") },
-                                trailingIcon = {
-                                    val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
-                                    val description = if (passwordVisible) "Hide password" else "Show password"
-                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                        Icon(imageVector = image, contentDescription = description)
-                                    }
-                                },
-                                singleLine = true,
-                                shape = CircleShape,
-                                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                colors = textFieldColors,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            OutlinedTextField(
-                                value = confirmPassword,
-                                onValueChange = { confirmPassword = it; errorMsg = "" },
-                                label = { Text("Confirm New Password") },
-                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Lock") },
-                                trailingIcon = {
-                                    val image = if (confirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
-                                    val description = if (confirmPasswordVisible) "Hide password" else "Show password"
-                                    IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
-                                        Icon(imageVector = image, contentDescription = description)
-                                    }
-                                },
-                                singleLine = true,
-                                shape = CircleShape,
-                                visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                colors = textFieldColors,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            GradientButton(
-                                text = "Reset Password",
-                                onClick = {
-                                    if (password != confirmPassword) {
-                                        errorMsg = "Passwords do not match"
-                                        return@GradientButton
-                                    }
-                                    viewModel.resetPassword(email, securityAnswer, password,
-                                        onSuccess = {
-                                            successMsg = "Password reset successfully! Log in."
-                                            mode = "LOGIN"
-                                            forgotStep = 1
-                                            errorMsg = ""
-                                            securityAnswer = ""
-                                            password = ""
-                                            confirmPassword = ""
-                                            passwordVisible = false
-                                            confirmPasswordVisible = false
-                                        },
-                                        onError = { errorMsg = it }
-                                    )
-                                }
-                            )
                         }
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Text(
-                            text = "Back to Sign In",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.clickable {
-                                mode = "LOGIN"
-                                errorMsg = ""
-                                successMsg = ""
-                                passwordVisible = false
-                                confirmPasswordVisible = false
-                            }
-                        )
                     }
                 }
             }

@@ -22,8 +22,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -212,7 +212,7 @@ fun HabitCardContent(
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
                         Icon(
-                            imageVector = Icons.Default.Check,
+                            imageVector = Icons.Outlined.Check,
                             contentDescription = "Swipe indicator",
                             tint = parsedColor,
                             modifier = Modifier.size(24.dp)
@@ -230,7 +230,7 @@ fun HabitCardContent(
             // Visual feedback overlay based on swipe
             if (isTop && swipeOffset != 0f) {
                 val overlayColor = if (swipeOffset > 0) Color(0xFF06D6A0) else Color(0xFF8338EC)
-                val icon = if (swipeOffset > 0) Icons.Default.Check else Icons.Default.Close
+                val icon = if (swipeOffset > 0) Icons.Outlined.Check else Icons.Outlined.Close
                 val textLabel = if (swipeOffset > 0) "COMPLETE" else "SKIP"
 
                 Box(
@@ -322,7 +322,7 @@ fun CompletedHabitRow(
                     .background(parsedColor.copy(alpha = 0.1f), CircleShape)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = Icons.Outlined.Close,
                     contentDescription = "Undo completion",
                     tint = parsedColor,
                     modifier = Modifier.size(14.dp)

@@ -42,9 +42,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import com.example.loophabit.data.Habit
 import com.example.loophabit.data.HabitCompletion
 import java.util.Locale
@@ -57,6 +59,16 @@ fun InsightsDashboard(
 ) {
     val allHabits by viewModel.allHabits.collectAsState()
     val allCompletions by viewModel.allCompletions.collectAsState()
+
+    var animateCharts by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        animateCharts = true
+    }
+    val chartProgress by animateFloatAsState(
+        targetValue = if (animateCharts) 1f else 0f,
+        animationSpec = tween(durationMillis = 800),
+        label = "chartProgress"
+    )
 
     // 1. Calculations:
     val today = java.time.LocalDate.now()
@@ -216,7 +228,7 @@ fun InsightsDashboard(
                     verticalAlignment = Alignment.Bottom
                 ) {
                     completionsPerDay.forEach { (date, count) ->
-                        val ratio = count.toFloat() / maxVal.toFloat()
+                        val ratio = (count.toFloat() / maxVal.toFloat()) * chartProgress
                         val barHeight = (ratio * 70).coerceAtLeast(4f).dp
                         val isCurrentDay = date == today
 
@@ -282,7 +294,7 @@ fun InsightsDashboard(
                     verticalAlignment = Alignment.Bottom
                 ) {
                     weekdayCompletions.forEachIndexed { idx, count ->
-                        val ratio = count.toFloat() / maxCount.toFloat()
+                        val ratio = (count.toFloat() / maxCount.toFloat()) * chartProgress
                         val barHeight = (ratio * 80).coerceAtLeast(4f).dp
 
                         Column(
@@ -443,7 +455,7 @@ fun MonthlyCalendarTab(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { currentMonth = currentMonth.minusMonths(1) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Month")
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, contentDescription = "Previous Month")
             }
             Text(
                 text = "${currentMonth.month.getDisplayName(java.time.format.TextStyle.FULL, Locale.getDefault())} ${currentMonth.year}",
@@ -452,7 +464,7 @@ fun MonthlyCalendarTab(
                 color = MaterialTheme.colorScheme.onSurface
             )
             IconButton(onClick = { currentMonth = currentMonth.plusMonths(1) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Month")
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = "Next Month")
             }
         }
 
@@ -632,7 +644,7 @@ fun YearAtAGlanceGrid(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { selectedYear-- }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Prev Year")
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, contentDescription = "Prev Year")
             }
             Text(
                 text = "Year $selectedYear",
@@ -641,7 +653,7 @@ fun YearAtAGlanceGrid(
                 color = MaterialTheme.colorScheme.onSurface
             )
             IconButton(onClick = { selectedYear++ }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Year")
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = "Next Year")
             }
         }
 
@@ -795,6 +807,16 @@ fun InsightsStatsTab(
         0f
     }
 
+    var animateProgress by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        animateProgress = true
+    }
+    val animatedProgressVal by animateFloatAsState(
+        targetValue = if (animateProgress) weeklyGoalProgress else 0f,
+        animationSpec = tween(durationMillis = 800),
+        label = "progressAnim"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -895,7 +917,7 @@ fun InsightsStatsTab(
 
                 Box(contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(
-                        progress = { weeklyGoalProgress.coerceIn(0f, 1f) },
+                        progress = { animatedProgressVal.coerceIn(0f, 1f) },
                         modifier = Modifier.size(54.dp),
                         strokeWidth = 5.dp,
                         color = parsedColor,
