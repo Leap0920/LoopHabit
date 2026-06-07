@@ -2,6 +2,9 @@ package com.example.loophabit.ui
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,6 +28,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -152,9 +156,26 @@ fun MainScreen(viewModel: HabitViewModel) {
     var activeTab by remember { mutableStateOf("TODAY") } // TODAY, INSIGHTS
     var showAddDialog by remember { mutableStateOf(false) }
     var showManageDialog by remember { mutableStateOf(false) }
-    var showLogoutConfirmation by remember { mutableStateOf(false) }
     var selectedHabitForDetails by remember { mutableStateOf<Habit?>(null) }
     var showNumericalLogDialogForHabit by remember { mutableStateOf<Habit?>(null) }
+
+    val context = LocalContext.current
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importData(
+                context = context,
+                uri = uri,
+                onSuccess = {
+                    Toast.makeText(context, "Backup restored successfully!", Toast.LENGTH_LONG).show()
+                },
+                onError = { err ->
+                    Toast.makeText(context, "Failed to restore backup: $err", Toast.LENGTH_LONG).show()
+                }
+            )
+        }
+    }
 
     val totalHabitsCount = incompleteHabits.size + completedHabits.size
     val completionProgress = if (totalHabitsCount > 0) {
@@ -165,11 +186,8 @@ fun MainScreen(viewModel: HabitViewModel) {
 
     // Wrap with theme based on user preference
     LoopHabitTheme(darkTheme = darkModeEnabled) {
-        if (currentUserId == 0L) {
-            AuthScreen(viewModel = viewModel)
-        } else {
-            Box(modifier = Modifier.fillMaxSize()) {
-                Scaffold(
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
             topBar = {
                 TopAppBar(
                     title = {
@@ -193,13 +211,10 @@ fun MainScreen(viewModel: HabitViewModel) {
                     actions = {
                         // Sync Status Indicator
                         SyncStatusIndicator(syncState = syncState)
-                        TextButton(onClick = { showManageDialog = true }) {
-                            Text("Manage", fontWeight = FontWeight.Bold)
-                        }
-                        IconButton(onClick = { showLogoutConfirmation = true }) {
+                        IconButton(onClick = { showManageDialog = true }) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
-                                contentDescription = "Logout",
+                                imageVector = Icons.Outlined.Settings,
+                                contentDescription = "Settings",
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
@@ -508,9 +523,9 @@ fun MainScreen(viewModel: HabitViewModel) {
         )
     }
 
-    // Manage Habits Dialog
+    // Settings Dialog
     if (showManageDialog) {
-        ManageHabitsDialog(
+        SettingsDialog(
             habits = allHabits,
             onDismiss = { showManageDialog = false },
             onDelete = { habit ->
@@ -519,7 +534,9 @@ fun MainScreen(viewModel: HabitViewModel) {
             onSelectHabit = { habit ->
                 selectedHabitForDetails = habit
             },
-            app = app
+            viewModel = viewModel,
+            app = app,
+            onImportClick = { importLauncher.launch("application/json") }
         )
     }
 
@@ -543,28 +560,7 @@ fun MainScreen(viewModel: HabitViewModel) {
         )
     }
 
-    if (showLogoutConfirmation) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { showLogoutConfirmation = false },
-            title = { Text("Log Out", fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to log out?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showLogoutConfirmation = false
-                        viewModel.logout()
-                    }
-                ) {
-                    Text("Log Out", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLogoutConfirmation = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
+
 
     val focusHabitId by viewModel.focusHabitId.collectAsState()
     val focusHabit = allHabits.find { it.id == focusHabitId }
@@ -622,7 +618,6 @@ fun MainScreen(viewModel: HabitViewModel) {
                 }
             }
         )
-    }
     }
     }
 }

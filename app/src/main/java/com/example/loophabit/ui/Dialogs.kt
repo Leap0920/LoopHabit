@@ -63,6 +63,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import com.example.loophabit.LoopHabitApp
 import com.example.loophabit.data.Habit
 import kotlinx.coroutines.launch
@@ -342,84 +346,243 @@ fun AddHabitDialog(
 
 
 @Composable
-fun ManageHabitsDialog(
+fun SettingsDialog(
     habits: List<Habit>,
     onDismiss: () -> Unit,
     onDelete: (Habit) -> Unit,
     onSelectHabit: (Habit) -> Unit,
-    app: LoopHabitApp
+    viewModel: HabitViewModel,
+    app: LoopHabitApp,
+    onImportClick: () -> Unit
 ) {
     val darkModeEnabled by app.preferences.darkModeEnabledFlow.collectAsState(initial = false)
+    val autoBackupHours by viewModel.autoBackupInterval.collectAsState()
     val coroutineScope = rememberCoroutineScope()
-    Dialog(onDismissRequest = onDismiss) {
+    val context = LocalContext.current
+
+    var showResetConfirm by remember { mutableStateOf(false) }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    val backupOptions = listOf(
+        0 to "Disabled",
+        6 to "6 Hours",
+        12 to "12 Hours",
+        24 to "24 Hours (Daily)",
+        168 to "7 Days (Weekly)"
+    )
+    val currentBackupLabel = backupOptions.find { it.first == autoBackupHours }?.second ?: "Disabled"
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Card(
             shape = RoundedCornerShape(28.dp),
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+                .fillMaxWidth(0.92f)
+                .fillMaxHeight(0.85f)
+                .padding(vertical = 16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(
                 modifier = Modifier
+                    .fillMaxSize()
                     .padding(24.dp)
-                    .fillMaxHeight(0.6f),
-                horizontalAlignment = Alignment.Start
             ) {
                 Text(
-                    text = "Manage Habits",
+                    text = "Settings",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Dark Mode Toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text(
-                        text = "Dark Mode",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Switch(
-                        checked = darkModeEnabled,
-                        onCheckedChange = { enabled ->
-                            coroutineScope.launch { app.preferences.setDarkModeEnabled(enabled) }
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.primary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
-                            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    )
-                }
+                    // Theme Row
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f), shape = RoundedCornerShape(16.dp))
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Dark Mode",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Adjust background theme style",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = darkModeEnabled,
+                                onCheckedChange = { enabled ->
+                                    coroutineScope.launch { app.preferences.setDarkModeEnabled(enabled) }
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            )
+                        }
+                    }
 
-                Divider(modifier = Modifier.padding(vertical = 16.dp))
+                    // Auto-Backup Row
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f), shape = RoundedCornerShape(16.dp))
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Auto-Backup frequency",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Schedule background backup logs",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Box {
+                                Box(
+                                    modifier = Modifier
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), shape = RoundedCornerShape(12.dp))
+                                        .clickable { dropdownExpanded = true }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        text = currentBackupLabel,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = dropdownExpanded,
+                                    onDismissRequest = { dropdownExpanded = false }
+                                ) {
+                                    backupOptions.forEach { (hours, label) ->
+                                        DropdownMenuItem(
+                                            text = { Text(label) },
+                                            onClick = {
+                                                viewModel.setAutoBackupInterval(hours)
+                                                dropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
 
-                if (habits.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    // Backup & Restore Actions
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f), shape = RoundedCornerShape(16.dp))
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "Local Backup & Restore",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Button(
+                                    onClick = { viewModel.exportData(context) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Export Data", fontWeight = FontWeight.Bold)
+                                }
+                                Button(
+                                    onClick = onImportClick,
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Import Data", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    // Reset Data Row
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f), shape = RoundedCornerShape(16.dp))
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Reset App / Logout",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Text(
+                                    text = "Permanently wipe all habits & history",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                                )
+                            }
+                            TextButton(
+                                onClick = { showResetConfirm = true }
+                            ) {
+                                Text("Reset", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // Habits List section
+                    item {
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
                         Text(
-                            text = "No habits to manage.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "Manage Habits (${habits.size})",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+
+                    if (habits.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("No habits to manage.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
                         items(habits) { habit ->
                             val parsedColor = remember(habit.colorHex) {
                                 try {
@@ -459,7 +622,8 @@ fun ManageHabitsDialog(
                                         text = habit.title,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                                 IconButton(
@@ -489,6 +653,31 @@ fun ManageHabitsDialog(
                 }
             }
         }
+    }
+
+    if (showResetConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text("Reset All Data?", fontWeight = FontWeight.Bold) },
+            text = { Text("This will permanently delete all your habits, completed checks, and focus session records. This action cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showResetConfirm = false
+                        viewModel.resetAllData {
+                            Toast.makeText(context, "All app data reset successfully.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                ) {
+                    Text("Delete Everything", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

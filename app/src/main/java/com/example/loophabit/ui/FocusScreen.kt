@@ -50,102 +50,135 @@ fun FocusScreen(viewModel: HabitViewModel) {
     val context = LocalContext.current
     val habits by viewModel.allHabits.collectAsState()
 
-    var selectedHabit by remember { mutableStateOf<Habit?>(null) }
-    var taskDetails by remember { mutableStateOf("") }
-    
-    // Switcher mode state: TIMER, STOPWATCH
-    var focusMode by remember { mutableStateOf("TIMER") }
+    val persistedState by viewModel.focusState.collectAsState()
 
-    // Timer state
-    var initialDurationMinutes by remember { mutableStateOf(25) }
-    var secondsLeft by remember { mutableStateOf(25 * 60) }
-    
-    // Stopwatch state
-    var secondsElapsed by remember { mutableStateOf(0) }
+    val isServiceRunning by FocusService.isServiceRunning.collectAsState()
+    val serviceMode by FocusService.mode.collectAsState()
+    val serviceSecondsLeft by FocusService.secondsLeft.collectAsState()
+    val serviceSecondsElapsed by FocusService.secondsElapsed.collectAsState()
+    val serviceHabitTitle by FocusService.habitTitle.collectAsState()
 
-    var isRunning by remember { mutableStateOf(false) }
+    val isRunning = isServiceRunning
+    val focusMode = if (isServiceRunning) serviceMode else persistedState.mode
+
+    val selectedHabit = remember(isServiceRunning, serviceHabitTitle, persistedState.habitId, habits) {
+        if (isServiceRunning) {
+            habits.find { it.title == serviceHabitTitle }
+        } else {
+            habits.find { it.id == persistedState.habitId } ?: habits.firstOrNull()
+        }
+    }
+
+    val taskDetails = if (isServiceRunning) "" else persistedState.taskDetails
+    val initialDurationMinutes = persistedState.initialDurationMinutes
+
+    val secondsLeft = if (isServiceRunning && serviceMode == "TIMER") {
+        serviceSecondsLeft
+    } else {
+        persistedState.pausedSeconds
+    }
+
+    val secondsElapsed = if (isServiceRunning && serviceMode == "STOPWATCH") {
+        serviceSecondsElapsed
+    } else {
+        persistedState.pausedSeconds
+    }
+
     var showSuccessDialog by remember { mutableStateOf(false) }
 
-    // Sync selected habit when habits change or initially
-    LaunchedEffect(habits) {
-        if (selectedHabit == null && habits.isNotEmpty()) {
-            selectedHabit = habits.firstOrNull()
-        }
-    }
+    // Recover running state if app was killed/restarted but preferences say it's running
+    LaunchedEffect(persistedState) {
+        if (persistedState.isRunning && !FocusService.isServiceRunning.value) {
+            val now = System.currentTimeMillis()
+            val diff = ((now - persistedState.baseTimestamp) / 1000).toInt()
 
-    // Reset secondsLeft when initialDurationMinutes changes (if not running)
-    LaunchedEffect(initialDurationMinutes) {
-        if (!isRunning && focusMode == "TIMER") {
-            secondsLeft = initialDurationMinutes * 60
-        }
-    }
-
-    // Reset stopwatch/timer when switching modes
-    LaunchedEffect(focusMode) {
-        isRunning = false
-        if (focusMode == "TIMER") {
-            secondsLeft = initialDurationMinutes * 60
-        } else {
-            secondsElapsed = 0
-        }
-    }
-
-    // Ticking loop
-    LaunchedEffect(isRunning, secondsLeft, secondsElapsed, focusMode) {
-        if (isRunning) {
-            delay(1000L)
-            if (focusMode == "TIMER") {
-                if (secondsLeft > 0) {
-                    secondsLeft -= 1
-                    if (secondsLeft == 0) {
-                        isRunning = false
-                        showSuccessDialog = true
-                        
-                        // Log focus session in database
-                        val duration = initialDurationMinutes * 60
-                        viewModel.logFocusSession(
-                            habitId = selectedHabit?.id,
-                            durationSeconds = duration,
-                            details = taskDetails.takeIf { it.isNotBlank() }
+            if (persistedState.mode == "TIMER") {
+                val remaining = persistedState.pausedSeconds - diff
+                if (remaining > 0) {
+                    FocusService.startService(
+                        context = context,
+                        mode = "TIMER",
+                        habitTitle = persistedState.habitTitle,
+                        durationSeconds = persistedState.initialDurationMinutes * 60,
+                        secondsLeft = remaining,
+                        secondsElapsed = 0
+                    )
+                } else {
+                    // Timer completed in background while app was dead
+                    val duration = persistedState.initialDurationMinutes * 60
+                    viewModel.logFocusSession(
+                        habitId = persistedState.habitId.takeIf { it > 0 },
+                        durationSeconds = duration,
+                        details = persistedState.taskDetails.takeIf { it.isNotBlank() }
+                    )
+                    showSuccessDialog = true
+                    viewModel.updateFocusState(
+                        persistedState.copy(
+                            isRunning = false,
+                            pausedSeconds = persistedState.initialDurationMinutes * 60
                         )
+                    )
+                }
+            } else {
+                // STOPWATCH
+                val elapsed = persistedState.pausedSeconds + diff
+                FocusService.startService(
+                    context = context,
+                    mode = "STOPWATCH",
+                    habitTitle = persistedState.habitTitle,
+                    durationSeconds = 0,
+                    secondsLeft = 0,
+                    secondsElapsed = elapsed
+                )
+            }
+        }
+    }
 
-                        // Play Ringtone default chime
-                        try {
-                            val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                            val ringtone = RingtoneManager.getRingtone(context, notificationUri)
-                            ringtone?.play()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
+    // Handle timer completion dialog when service ticks to 0
+    LaunchedEffect(isServiceRunning, serviceSecondsLeft) {
+        if (isServiceRunning && serviceMode == "TIMER" && serviceSecondsLeft == 0) {
+            showSuccessDialog = true
+            val defaultSecs = initialDurationMinutes * 60
+            viewModel.updateFocusState(
+                persistedState.copy(
+                    isRunning = false,
+                    pausedSeconds = defaultSecs
+                )
+            )
+            FocusService.stopService(context)
+            
+            // Play Ringtone default chime
+            try {
+                val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                val ringtone = RingtoneManager.getRingtone(context, notificationUri)
+                ringtone?.play()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
 
-                        // Trigger soft dual-pulse vibration pattern
-                        try {
-                            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                                vibratorManager?.defaultVibrator
-                            } else {
-                                @Suppress("DEPRECATION")
-                                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                            }
-                            vibrator?.let {
-                                if (it.hasVibrator()) {
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                        val timings = longArrayOf(0, 150, 100, 150)
-                                        val amplitudes = intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 0, VibrationEffect.DEFAULT_AMPLITUDE)
-                                        it.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
-                                    } else {
-                                        @Suppress("DEPRECATION")
-                                        it.vibrate(longArrayOf(0, 150, 100, 150), -1)
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
+            // Trigger soft dual-pulse vibration pattern
+            try {
+                val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                    vibratorManager?.defaultVibrator
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                }
+                vibrator?.let {
+                    if (it.hasVibrator()) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            val timings = longArrayOf(0, 150, 100, 150)
+                            val amplitudes = intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 0, VibrationEffect.DEFAULT_AMPLITUDE)
+                            it.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            it.vibrate(longArrayOf(0, 150, 100, 150), -1)
                         }
                     }
                 }
-            } else {
-                secondsElapsed += 1
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -225,7 +258,13 @@ fun FocusScreen(viewModel: HabitViewModel) {
                             .clip(RoundedCornerShape(12.dp))
                             .background(if (isSelected) parsedColor else Color.Transparent)
                             .clickable(enabled = !isRunning) {
-                                focusMode = mode
+                                val defaultSecs = if (mode == "TIMER") persistedState.initialDurationMinutes * 60 else 0
+                                viewModel.updateFocusState(
+                                    persistedState.copy(
+                                        mode = mode,
+                                        pausedSeconds = defaultSecs
+                                    )
+                                )
                             }
                     ) {
                         Text(
@@ -287,12 +326,14 @@ fun FocusScreen(viewModel: HabitViewModel) {
                 // Reset Button
                 IconButton(
                     onClick = {
-                        isRunning = false
-                        if (focusMode == "TIMER") {
-                            secondsLeft = initialDurationMinutes * 60
-                        } else {
-                            secondsElapsed = 0
-                        }
+                        FocusService.stopService(context)
+                        val defaultSecs = if (focusMode == "TIMER") initialDurationMinutes * 60 else 0
+                        viewModel.updateFocusState(
+                            persistedState.copy(
+                                isRunning = false,
+                                pausedSeconds = defaultSecs
+                            )
+                        )
                     },
                     modifier = Modifier
                         .size(48.dp)
@@ -307,7 +348,38 @@ fun FocusScreen(viewModel: HabitViewModel) {
 
                 // Play / Pause Button
                 Button(
-                    onClick = { isRunning = !isRunning },
+                    onClick = {
+                        if (isRunning) {
+                            FocusService.stopService(context)
+                            val currentSecs = if (focusMode == "TIMER") secondsLeft else secondsElapsed
+                            viewModel.updateFocusState(
+                                persistedState.copy(
+                                    isRunning = false,
+                                    pausedSeconds = currentSecs,
+                                    baseTimestamp = System.currentTimeMillis()
+                                )
+                            )
+                        } else {
+                            val currentSecs = if (focusMode == "TIMER") secondsLeft else secondsElapsed
+                            val now = System.currentTimeMillis()
+                            viewModel.updateFocusState(
+                                persistedState.copy(
+                                    isRunning = true,
+                                    pausedSeconds = currentSecs,
+                                    baseTimestamp = now,
+                                    habitTitle = selectedHabit?.title ?: ""
+                                )
+                            )
+                            FocusService.startService(
+                                context = context,
+                                mode = focusMode,
+                                habitTitle = selectedHabit?.title ?: "",
+                                durationSeconds = initialDurationMinutes * 60,
+                                secondsLeft = if (focusMode == "TIMER") currentSecs else 0,
+                                secondsElapsed = if (focusMode == "STOPWATCH") currentSecs else 0
+                            )
+                        }
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = parsedColor),
                     shape = CircleShape,
                     modifier = Modifier
@@ -340,7 +412,7 @@ fun FocusScreen(viewModel: HabitViewModel) {
                 if (isTimerEarly || isStopwatchLogged) {
                     IconButton(
                         onClick = {
-                            isRunning = false
+                            FocusService.stopService(context)
                             val duration = if (focusMode == "TIMER") {
                                 initialDurationMinutes * 60 - secondsLeft
                             } else {
@@ -350,6 +422,13 @@ fun FocusScreen(viewModel: HabitViewModel) {
                                 habitId = selectedHabit?.id,
                                 durationSeconds = duration,
                                 details = taskDetails.takeIf { it.isNotBlank() }
+                            )
+                            val defaultSecs = if (focusMode == "TIMER") initialDurationMinutes * 60 else 0
+                            viewModel.updateFocusState(
+                                persistedState.copy(
+                                    isRunning = false,
+                                    pausedSeconds = defaultSecs
+                                )
                             )
                             showSuccessDialog = true
                         },
@@ -404,7 +483,12 @@ fun FocusScreen(viewModel: HabitViewModel) {
                                             if (isSelected) parsedColor else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                                         )
                                         .clickable(enabled = !isRunning) {
-                                            initialDurationMinutes = mins
+                                            viewModel.updateFocusState(
+                                                persistedState.copy(
+                                                    initialDurationMinutes = mins,
+                                                    pausedSeconds = mins * 60
+                                                )
+                                            )
                                         }
                                 ) {
                                     Text(
@@ -536,7 +620,12 @@ fun FocusScreen(viewModel: HabitViewModel) {
                                             }
                                         },
                                         onClick = {
-                                            selectedHabit = habit
+                                            viewModel.updateFocusState(
+                                                persistedState.copy(
+                                                    habitId = habit.id,
+                                                    habitTitle = habit.title
+                                                )
+                                            )
                                             showHabitsDropdown = false
                                         }
                                     )
@@ -558,7 +647,11 @@ fun FocusScreen(viewModel: HabitViewModel) {
                     // Transparent Glassmorphic Input Details
                     OutlinedTextField(
                         value = taskDetails,
-                        onValueChange = { taskDetails = it },
+                        onValueChange = {
+                            viewModel.updateFocusState(
+                                persistedState.copy(taskDetails = it)
+                            )
+                        },
                         placeholder = { Text("What are you working on? (Optional)") },
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -632,11 +725,6 @@ fun FocusScreen(viewModel: HabitViewModel) {
                         onClick = {
                             viewModel.completeHabit(selectedHabit!!.id)
                             showSuccessDialog = false
-                            if (focusMode == "TIMER") {
-                                secondsLeft = initialDurationMinutes * 60
-                            } else {
-                                secondsElapsed = 0
-                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = parsedColor)
                     ) {
@@ -646,11 +734,6 @@ fun FocusScreen(viewModel: HabitViewModel) {
                     Button(
                         onClick = {
                             showSuccessDialog = false
-                            if (focusMode == "TIMER") {
-                                secondsLeft = initialDurationMinutes * 60
-                            } else {
-                                secondsElapsed = 0
-                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = parsedColor)
                     ) {
@@ -662,11 +745,6 @@ fun FocusScreen(viewModel: HabitViewModel) {
                 TextButton(
                     onClick = {
                         showSuccessDialog = false
-                        if (focusMode == "TIMER") {
-                            secondsLeft = initialDurationMinutes * 60
-                        } else {
-                            secondsElapsed = 0
-                        }
                     }
                 ) {
                     Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)

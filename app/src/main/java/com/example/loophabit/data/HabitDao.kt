@@ -61,4 +61,13 @@ interface HabitDao {
 
     @Query("SELECT * FROM focus_sessions WHERE userId = :userId ORDER BY timestamp DESC")
     fun getAllFocusSessions(userId: Long): Flow<List<FocusSession>>
+
+    @Query("DELETE FROM habits WHERE userId = :userId")
+    suspend fun clearHabitsForUser(userId: Long): Int
+
+    @Query("DELETE FROM focus_sessions WHERE userId = :userId")
+    suspend fun clearFocusSessionsForUser(userId: Long): Int
+
+    @Query("DELETE FROM habit_completions WHERE habitId IN (SELECT id FROM habits WHERE userId = :userId)")
+    suspend fun clearCompletionsForUser(userId: Long): Int
 }

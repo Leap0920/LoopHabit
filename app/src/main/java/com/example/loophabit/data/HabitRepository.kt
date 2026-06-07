@@ -17,6 +17,11 @@ class HabitRepository(
 ) {
     val loopIndexFlow: Flow<Int> = loopPreferences.loopIndexFlow
     val currentUserIdFlow: Flow<Long> = loopPreferences.currentUserIdFlow
+    val autoBackupIntervalFlow: Flow<Int> = loopPreferences.autoBackupIntervalFlow
+
+    suspend fun setAutoBackupInterval(intervalHours: Int) {
+        loopPreferences.setAutoBackupInterval(intervalHours)
+    }
 
     // Sync state exposed to UI
     val syncState: Flow<com.example.loophabit.data.sync.SyncState> = syncManager?.syncState ?: MutableStateFlow(com.example.loophabit.data.sync.SyncState.Idle).asStateFlow()
@@ -155,6 +160,30 @@ class HabitRepository(
                 details = details
             )
         )
+    }
+
+    val focusStateFlow: Flow<FocusState> = loopPreferences.focusStateFlow
+
+    suspend fun saveFocusState(state: FocusState) {
+        loopPreferences.saveFocusState(state)
+    }
+
+    suspend fun clearUserData(userId: Long) {
+        habitDao.clearCompletionsForUser(userId)
+        habitDao.clearFocusSessionsForUser(userId)
+        habitDao.clearHabitsForUser(userId)
+    }
+
+    suspend fun insertHabitDirect(habit: Habit) {
+        habitDao.insertHabit(habit)
+    }
+
+    suspend fun insertCompletionDirect(completion: HabitCompletion) {
+        habitDao.insertCompletion(completion)
+    }
+
+    suspend fun insertFocusSessionDirect(session: FocusSession) {
+        habitDao.insertFocusSession(session)
     }
 
     /** Triggers a background sync if SyncManager is available */

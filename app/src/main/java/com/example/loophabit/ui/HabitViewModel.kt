@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.loophabit.data.Habit
 import com.example.loophabit.data.HabitRepository
 import com.example.loophabit.data.User
+import com.example.loophabit.data.FocusState
 import com.example.loophabit.data.sync.SyncManager
 import com.example.loophabit.data.sync.SyncState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -36,6 +38,163 @@ class HabitViewModel(
 
     val currentUserId: StateFlow<Long> = repository.currentUserIdFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
+    val autoBackupInterval: StateFlow<Int> = repository.autoBackupIntervalFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    init {
+        viewModelScope.launch {
+            repository.currentUserIdFlow.collect { userId ->
+                if (userId == 0L) {
+                    val defaultUser = repository.getUserByUsername("local_user")
+                    if (defaultUser == null) {
+                        val newUser = User(
+                            username = "local_user",
+                            email = "local@loophabit.com",
+                            password = "local_password",
+                            securityQuestion = "Local?",
+                            securityAnswer = "Yes"
+                        )
+                        val insertedId = repository.registerUser(newUser)
+                        repository.setCurrentUserId(insertedId)
+                    } else {
+                        repository.setCurrentUserId(defaultUser.id)
+                    }
+                }
+            }
+        }
+    }
+
+    fun setAutoBackupInterval(intervalHours: Int) {
+        viewModelScope.launch {
+            repository.setAutoBackupInterval(intervalHours)
+            com.example.loophabit.data.sync.BackupWorker.scheduleAutoBackup(applicationContext, intervalHours)
+        }
+    }
+
+    fun exportData(context: Context) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val userId = currentUserId.value
+                if (userId == 0L) return@launch
+                val habits = repository.getAllHabits(userId).first()
+                val completions = repository.getAllCompletionsForUser(userId).first()
+                val focusSessions = repository.getAllFocusSessions(userId).first()
+
+                val backupMap = mapOf(
+                    "habits" to habits,
+                    "completions" to completions,
+                    "focusSessions" to focusSessions
+                )
+
+                val jsonString = com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(backupMap)
+                
+                val cacheFile = java.io.File(context.cacheDir, "LoopHabit_Backup.json")
+                cacheFile.writeText(jsonString)
+
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "com.example.loophabit.fileprovider",
+                    cacheFile
+                )
+
+                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+
+                val chooser = android.content.Intent.createChooser(intent, "Export Backup").apply {
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(chooser)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun importData(
+        context: Context,
+        uri: android.net.Uri,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val userId = currentUserId.value
+                if (userId == 0L) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onError("No user session active")
+                    }
+                    return@launch
+                }
+
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val jsonText = inputStream?.bufferedReader()?.use { it.readText() }
+                if (jsonText.isNullOrBlank()) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onError("Backup file is empty")
+                    }
+                    return@launch
+                }
+
+                val gson = com.google.gson.Gson()
+                val backupData = gson.fromJson(jsonText, com.example.loophabit.data.sync.BackupData::class.java)
+
+                if (backupData.habits == null) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onError("Invalid backup file format")
+                    }
+                    return@launch
+                }
+
+                // Restore database in repository
+                repository.clearUserData(userId)
+
+                // 1. Insert habits
+                backupData.habits.forEach { habit ->
+                    repository.insertHabitDirect(habit.copy(userId = userId))
+                }
+
+                // 2. Insert completions
+                backupData.completions?.forEach { completion ->
+                    repository.insertCompletionDirect(completion)
+                }
+
+                // 3. Insert focus sessions
+                backupData.focusSessions?.forEach { session ->
+                    repository.insertFocusSessionDirect(session.copy(userId = userId))
+                }
+
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onSuccess()
+                }
+                updateWidget()
+                triggerSync()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onError(e.message ?: "Import failed")
+                }
+            }
+        }
+    }
+
+    fun resetAllData(onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            val userId = currentUserId.value
+            if (userId != 0L) {
+                repository.clearUserData(userId)
+                repository.setCurrentUserId(userId)
+                repository.setLoopIndex(0)
+                repository.setAutoBackupInterval(0)
+                com.example.loophabit.data.sync.BackupWorker.cancelAutoBackup(applicationContext)
+                updateWidget()
+                onSuccess()
+            }
+        }
+    }
 
     val allHabits: StateFlow<List<Habit>> = currentUserId
         .flatMapLatest { userId ->
@@ -88,6 +247,15 @@ class HabitViewModel(
 
     fun setFocusHabitId(id: Long?) {
         _focusHabitId.value = id
+    }
+
+    val focusState: StateFlow<FocusState> = repository.focusStateFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FocusState())
+
+    fun updateFocusState(state: FocusState) {
+        viewModelScope.launch {
+            repository.saveFocusState(state)
+        }
     }
 
     private fun updateWidget() {

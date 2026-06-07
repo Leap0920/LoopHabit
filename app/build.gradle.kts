@@ -38,6 +38,7 @@ android {
             }
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -45,6 +46,14 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set("LoopHabit-${variant.name}.apk")
+        }
     }
 }
 

@@ -10,6 +10,8 @@ import com.example.loophabit.data.sync.AuthStateProvider
 import com.example.loophabit.data.sync.SyncManager
 import com.example.loophabit.data.sync.SupabaseSyncClientFactory
 import com.example.loophabit.data.sync.SyncScheduler
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 class LoopHabitApp : Application() {
 
@@ -42,6 +44,18 @@ class LoopHabitApp : Application() {
         SyncScheduler.registerNetworkCallback(this)
         // Schedule daily habit reminder at 8:00 PM
         com.example.loophabit.data.sync.ReminderWorker.scheduleDailyReminder(this)
+
+        // Schedule auto-backup on app start if an interval is set
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val interval = preferences.autoBackupIntervalFlow.first()
+                if (interval > 0) {
+                    com.example.loophabit.data.sync.BackupWorker.scheduleAutoBackup(this@LoopHabitApp, interval)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     override fun onTerminate() {
