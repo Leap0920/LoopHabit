@@ -95,6 +95,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.gson)
+    implementation(libs.androidx.documentfile)
 
     // WorkManager
     implementation(libs.androidx.work.runtime)

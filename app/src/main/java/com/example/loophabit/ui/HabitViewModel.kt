@@ -42,6 +42,9 @@ class HabitViewModel(
     val autoBackupInterval: StateFlow<Int> = repository.autoBackupIntervalFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    val autoBackupUri: StateFlow<String?> = repository.autoBackupUriFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     init {
         viewModelScope.launch {
             repository.currentUserIdFlow.collect { userId ->
@@ -69,6 +72,12 @@ class HabitViewModel(
         viewModelScope.launch {
             repository.setAutoBackupInterval(intervalHours)
             com.example.loophabit.data.sync.BackupWorker.scheduleAutoBackup(applicationContext, intervalHours)
+        }
+    }
+
+    fun setAutoBackupUri(uriString: String?) {
+        viewModelScope.launch {
+            repository.setAutoBackupUri(uriString)
         }
     }
 

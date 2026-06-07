@@ -20,6 +20,7 @@ class LoopPreferences(private val context: Context) {
         val CURRENT_USER_ID_KEY = longPreferencesKey("current_user_id")
         val DARK_MODE_KEY = booleanPreferencesKey("dark_mode_enabled")
         val AUTO_BACKUP_INTERVAL_KEY = intPreferencesKey("auto_backup_interval")
+        val AUTO_BACKUP_URI_KEY = stringPreferencesKey("auto_backup_uri")
     }
 
     val loopIndexFlow: Flow<Int> = context.dataStore.data
@@ -40,6 +41,11 @@ class LoopPreferences(private val context: Context) {
     val autoBackupIntervalFlow: Flow<Int> = context.dataStore.data
         .map { preferences ->
             preferences[AUTO_BACKUP_INTERVAL_KEY] ?: 0 // Default to 0 (Disabled)
+        }
+
+    val autoBackupUriFlow: Flow<String?> = context.dataStore.data
+        .map { preferences ->
+            preferences[AUTO_BACKUP_URI_KEY]
         }
 
     val focusStateFlow: Flow<FocusState> = context.dataStore.data
@@ -90,6 +96,16 @@ class LoopPreferences(private val context: Context) {
     suspend fun setAutoBackupInterval(intervalHours: Int) {
         context.dataStore.edit { preferences ->
             preferences[AUTO_BACKUP_INTERVAL_KEY] = intervalHours
+        }
+    }
+
+    suspend fun setAutoBackupUri(uriString: String?) {
+        context.dataStore.edit { preferences ->
+            if (uriString != null) {
+                preferences[AUTO_BACKUP_URI_KEY] = uriString
+            } else {
+                preferences.remove(AUTO_BACKUP_URI_KEY)
+            }
         }
     }
 }

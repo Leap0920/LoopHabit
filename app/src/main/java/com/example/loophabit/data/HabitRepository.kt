@@ -18,9 +18,14 @@ class HabitRepository(
     val loopIndexFlow: Flow<Int> = loopPreferences.loopIndexFlow
     val currentUserIdFlow: Flow<Long> = loopPreferences.currentUserIdFlow
     val autoBackupIntervalFlow: Flow<Int> = loopPreferences.autoBackupIntervalFlow
+    val autoBackupUriFlow: Flow<String?> = loopPreferences.autoBackupUriFlow
 
     suspend fun setAutoBackupInterval(intervalHours: Int) {
         loopPreferences.setAutoBackupInterval(intervalHours)
+    }
+
+    suspend fun setAutoBackupUri(uriString: String?) {
+        loopPreferences.setAutoBackupUri(uriString)
     }
 
     // Sync state exposed to UI

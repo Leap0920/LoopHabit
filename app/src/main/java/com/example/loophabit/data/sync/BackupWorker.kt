@@ -14,6 +14,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 
 class BackupWorker(
     context: Context,
@@ -38,23 +40,59 @@ class BackupWorker(
             )
 
             val jsonString = GsonBuilder().setPrettyPrinting().create().toJson(backupMap)
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val autoBackupUriString = app.preferences.autoBackupUriFlow.first()
 
-            val backupFolder = File(applicationContext.getExternalFilesDir(null), "backups")
-            if (!backupFolder.exists()) {
-                backupFolder.mkdirs()
+            var backupSuccessful = false
+
+            if (!autoBackupUriString.isNullOrBlank()) {
+                try {
+                    val uri = Uri.parse(autoBackupUriString)
+                    val directory = DocumentFile.fromTreeUri(applicationContext, uri)
+                    if (directory != null && directory.exists() && directory.isDirectory) {
+                        val newFile = directory.createFile("application/json", "LoopHabit_AutoBackup_$timestamp.json")
+                        if (newFile != null) {
+                            applicationContext.contentResolver.openOutputStream(newFile.uri)?.use { outputStream ->
+                                outputStream.write(jsonString.toByteArray())
+                            }
+
+                            // Keep only the 5 most recent auto-backups in the tree URI to prevent storage bloat
+                            val files = directory.listFiles()
+                            val autoBackupFiles = files.filter {
+                                it.name?.startsWith("LoopHabit_AutoBackup_") == true && it.name?.endsWith(".json") == true
+                            }
+                            if (autoBackupFiles.size > 5) {
+                                val sortedFiles = autoBackupFiles.sortedBy { it.lastModified() }
+                                val toDeleteCount = sortedFiles.size - 5
+                                for (i in 0 until toDeleteCount) {
+                                    sortedFiles[i].delete()
+                                }
+                            }
+                            backupSuccessful = true
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
 
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val backupFile = File(backupFolder, "LoopHabit_AutoBackup_$timestamp.json")
-            backupFile.writeText(jsonString)
+            if (!backupSuccessful) {
+                val backupFolder = File(applicationContext.getExternalFilesDir(null), "backups")
+                if (!backupFolder.exists()) {
+                    backupFolder.mkdirs()
+                }
 
-            // Keep only the 5 most recent auto-backups to prevent storage bloat
-            val files = backupFolder.listFiles { _, name -> name.startsWith("LoopHabit_AutoBackup_") && name.endsWith(".json") }
-            if (files != null && files.size > 5) {
-                val sortedFiles = files.sortedBy { it.lastModified() }
-                val toDeleteCount = sortedFiles.size - 5
-                for (i in 0 until toDeleteCount) {
-                    sortedFiles[i].delete()
+                val backupFile = File(backupFolder, "LoopHabit_AutoBackup_$timestamp.json")
+                backupFile.writeText(jsonString)
+
+                // Keep only the 5 most recent auto-backups to prevent storage bloat
+                val files = backupFolder.listFiles { _, name -> name.startsWith("LoopHabit_AutoBackup_") && name.endsWith(".json") }
+                if (files != null && files.size > 5) {
+                    val sortedFiles = files.sortedBy { it.lastModified() }
+                    val toDeleteCount = sortedFiles.size - 5
+                    for (i in 0 until toDeleteCount) {
+                        sortedFiles[i].delete()
+                    }
                 }
             }
 

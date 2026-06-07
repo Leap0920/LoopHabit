@@ -75,6 +75,11 @@ import com.example.loophabit.LoopHabitApp
 import com.example.loophabit.data.Habit
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import android.content.Intent
+import androidx.documentfile.provider.DocumentFile
 
 // Curated pastel/vibrant HSL colors for premium aesthetic
 val ColorPaletteList = listOf(
@@ -361,8 +366,39 @@ fun SettingsDialog(
 ) {
     val darkModeEnabled by app.preferences.darkModeEnabledFlow.collectAsState(initial = false)
     val autoBackupHours by viewModel.autoBackupInterval.collectAsState()
+    val autoBackupUriString by viewModel.autoBackupUri.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    val directoryPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val takeFlags: Int = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            try {
+                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+                viewModel.setAutoBackupUri(uri.toString())
+                Toast.makeText(context, "Backup folder selected successfully", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Failed to persist folder permissions", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val folderName = remember(autoBackupUriString) {
+        if (!autoBackupUriString.isNullOrBlank()) {
+            try {
+                val uri = Uri.parse(autoBackupUriString)
+                val doc = DocumentFile.fromTreeUri(context, uri)
+                doc?.name ?: "Selected Folder"
+            } catch (e: Exception) {
+                "Selected Folder"
+            }
+        } else {
+            "Default (App Private Folder)"
+        }
+    }
 
     var showResetConfirm by remember { mutableStateOf(false) }
     var dropdownExpanded by remember { mutableStateOf(false) }
@@ -490,6 +526,60 @@ fun SettingsDialog(
                                                 dropdownExpanded = false
                                             }
                                         )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Auto-Backup Folder Selection (Visible if auto-backup is enabled)
+                    if (autoBackupHours > 0) {
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f), shape = RoundedCornerShape(16.dp))
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Auto-Backup Folder",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = folderName,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (autoBackupUriString != null) {
+                                        TextButton(
+                                            onClick = {
+                                                viewModel.setAutoBackupUri(null)
+                                            }
+                                        ) {
+                                            Text("Reset", color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                    Button(
+                                        onClick = {
+                                            directoryPickerLauncher.launch(null)
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                                        modifier = Modifier.height(36.dp)
+                                    ) {
+                                        Text("Choose", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                     }
                                 }
                             }
