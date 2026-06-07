@@ -48,28 +48,34 @@ import android.content.Context
 @Composable
 fun FocusScreen(viewModel: HabitViewModel) {
     val context = LocalContext.current
-    val habits by viewModel.allHabits.collectAsState()
+    val allHabits by viewModel.allHabits.collectAsState()
+    val incompleteHabits by viewModel.incompleteHabits.collectAsState()
 
     val persistedState by viewModel.focusState.collectAsState()
 
     val isServiceRunning by FocusService.isServiceRunning.collectAsState()
+    val serviceIsPaused by FocusService.isPaused.collectAsState()
     val serviceMode by FocusService.mode.collectAsState()
     val serviceSecondsLeft by FocusService.secondsLeft.collectAsState()
     val serviceSecondsElapsed by FocusService.secondsElapsed.collectAsState()
     val serviceHabitTitle by FocusService.habitTitle.collectAsState()
 
-    val isRunning = isServiceRunning
+    val isRunning = isServiceRunning && !serviceIsPaused
     val focusMode = if (isServiceRunning) serviceMode else persistedState.mode
 
-    val selectedHabit = remember(isServiceRunning, serviceHabitTitle, persistedState.habitId, habits) {
+    val selectedHabit = remember(isServiceRunning, serviceHabitTitle, persistedState.habitId, allHabits, incompleteHabits) {
         if (isServiceRunning) {
-            habits.find { it.title == serviceHabitTitle }
+            allHabits.find { it.title == serviceHabitTitle }
         } else {
-            habits.find { it.id == persistedState.habitId } ?: habits.firstOrNull()
+            val savedHabit = allHabits.find { it.id == persistedState.habitId }
+            if (savedHabit != null && incompleteHabits.any { it.id == savedHabit.id }) {
+                savedHabit
+            } else {
+                incompleteHabits.firstOrNull() ?: allHabits.firstOrNull()
+            }
         }
     }
 
-    val taskDetails = if (isServiceRunning) "" else persistedState.taskDetails
     val initialDurationMinutes = persistedState.initialDurationMinutes
 
     val secondsLeft = if (isServiceRunning && serviceMode == "TIMER") {
@@ -109,7 +115,7 @@ fun FocusScreen(viewModel: HabitViewModel) {
                     viewModel.logFocusSession(
                         habitId = persistedState.habitId.takeIf { it > 0 },
                         durationSeconds = duration,
-                        details = persistedState.taskDetails.takeIf { it.isNotBlank() }
+                        details = null
                     )
                     showSuccessDialog = true
                     viewModel.updateFocusState(
@@ -326,14 +332,20 @@ fun FocusScreen(viewModel: HabitViewModel) {
                 // Reset Button
                 IconButton(
                     onClick = {
-                        FocusService.stopService(context)
-                        val defaultSecs = if (focusMode == "TIMER") initialDurationMinutes * 60 else 0
-                        viewModel.updateFocusState(
-                            persistedState.copy(
-                                isRunning = false,
-                                pausedSeconds = defaultSecs
+                        if (isServiceRunning) {
+                            val intent = android.content.Intent(context, FocusService::class.java).apply {
+                                action = FocusService.ACTION_RESET
+                            }
+                            context.startService(intent)
+                        } else {
+                            val defaultSecs = if (focusMode == "TIMER") initialDurationMinutes * 60 else 0
+                            viewModel.updateFocusState(
+                                persistedState.copy(
+                                    isRunning = false,
+                                    pausedSeconds = defaultSecs
+                                )
                             )
-                        )
+                        }
                     },
                     modifier = Modifier
                         .size(48.dp)
@@ -347,18 +359,21 @@ fun FocusScreen(viewModel: HabitViewModel) {
                 }
 
                 // Play / Pause Button
+                val isTicking = isServiceRunning && !serviceIsPaused
                 Button(
                     onClick = {
-                        if (isRunning) {
-                            FocusService.stopService(context)
-                            val currentSecs = if (focusMode == "TIMER") secondsLeft else secondsElapsed
-                            viewModel.updateFocusState(
-                                persistedState.copy(
-                                    isRunning = false,
-                                    pausedSeconds = currentSecs,
-                                    baseTimestamp = System.currentTimeMillis()
-                                )
-                            )
+                        if (isServiceRunning) {
+                            if (serviceIsPaused) {
+                                val intent = android.content.Intent(context, FocusService::class.java).apply {
+                                    action = FocusService.ACTION_RESUME
+                                }
+                                context.startService(intent)
+                            } else {
+                                val intent = android.content.Intent(context, FocusService::class.java).apply {
+                                    action = FocusService.ACTION_PAUSE
+                                }
+                                context.startService(intent)
+                            }
                         } else {
                             val currentSecs = if (focusMode == "TIMER") secondsLeft else secondsElapsed
                             val now = System.currentTimeMillis()
@@ -392,13 +407,13 @@ fun FocusScreen(viewModel: HabitViewModel) {
                         modifier = Modifier.fillMaxSize()
                     ) {
                         Icon(
-                            imageVector = if (isRunning) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
-                            contentDescription = if (isRunning) "Pause" else "Start",
+                            imageVector = if (isTicking) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                            contentDescription = if (isTicking) "Pause" else "Start",
                             tint = Color.White
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isRunning) "Pause" else "Start",
+                            text = if (isTicking) "Pause" else "Start",
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             fontSize = 16.sp
@@ -421,7 +436,7 @@ fun FocusScreen(viewModel: HabitViewModel) {
                             viewModel.logFocusSession(
                                 habitId = selectedHabit?.id,
                                 durationSeconds = duration,
-                                details = taskDetails.takeIf { it.isNotBlank() }
+                                details = null
                             )
                             val defaultSecs = if (focusMode == "TIMER") initialDurationMinutes * 60 else 0
                             viewModel.updateFocusState(
@@ -482,7 +497,7 @@ fun FocusScreen(viewModel: HabitViewModel) {
                                         .background(
                                             if (isSelected) parsedColor else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                                         )
-                                        .clickable(enabled = !isRunning) {
+                                        .clickable(enabled = !isServiceRunning) {
                                             viewModel.updateFocusState(
                                                 persistedState.copy(
                                                     initialDurationMinutes = mins,
@@ -547,7 +562,7 @@ fun FocusScreen(viewModel: HabitViewModel) {
                                     shape = RoundedCornerShape(12.dp)
                                 )
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable(enabled = !isRunning) { showHabitsDropdown = true }
+                                .clickable(enabled = !isServiceRunning) { showHabitsDropdown = true }
                                 .padding(horizontal = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -586,13 +601,14 @@ fun FocusScreen(viewModel: HabitViewModel) {
                                 .width(with(density) { parentWidth.toDp() })
                                 .background(MaterialTheme.colorScheme.surface)
                         ) {
-                            if (habits.isEmpty()) {
+                            if (incompleteHabits.isEmpty()) {
+                                val msg = if (allHabits.isEmpty()) "No habits available" else "All habits completed for today!"
                                 DropdownMenuItem(
-                                    text = { Text("No habits available", style = MaterialTheme.typography.bodyMedium) },
+                                    text = { Text(msg, style = MaterialTheme.typography.bodyMedium) },
                                     onClick = { showHabitsDropdown = false }
                                 )
                             } else {
-                                habits.forEach { habit ->
+                                incompleteHabits.forEach { habit ->
                                     val color = remember(habit.colorHex) {
                                         try {
                                             Color(android.graphics.Color.parseColor(habit.colorHex))
@@ -634,38 +650,6 @@ fun FocusScreen(viewModel: HabitViewModel) {
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "Task Details",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Transparent Glassmorphic Input Details
-                    OutlinedTextField(
-                        value = taskDetails,
-                        onValueChange = {
-                            viewModel.updateFocusState(
-                                persistedState.copy(taskDetails = it)
-                            )
-                        },
-                        placeholder = { Text("What are you working on? (Optional)") },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = parsedColor,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                            focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.1f),
-                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
             }
 

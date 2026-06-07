@@ -10,8 +10,10 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.loophabit.MainActivity
+import com.example.loophabit.LoopHabitApp
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 
 class FocusService : Service() {
 
@@ -28,8 +30,13 @@ class FocusService : Service() {
         const val EXTRA_SECONDS_LEFT = "seconds_left"
         const val EXTRA_SECONDS_ELAPSED = "seconds_elapsed"
 
+        const val ACTION_PAUSE = "com.example.loophabit.ACTION_PAUSE"
+        const val ACTION_RESUME = "com.example.loophabit.ACTION_RESUME"
+        const val ACTION_RESET = "com.example.loophabit.ACTION_RESET"
+
         // Static flows for the UI components to collect in real-time
         val isServiceRunning = MutableStateFlow(false)
+        val isPaused = MutableStateFlow(false)
         val mode = MutableStateFlow("TIMER")
         val secondsLeft = MutableStateFlow(0)
         val secondsElapsed = MutableStateFlow(0)
@@ -66,10 +73,17 @@ class FocusService : Service() {
     override fun onCreate() {
         super.onCreate()
         isServiceRunning.value = true
+        isPaused.value = false
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val action = intent?.action
+        if (action != null) {
+            handleAction(action)
+            return START_NOT_STICKY
+        }
+
         val inputMode = intent?.getStringExtra(EXTRA_MODE) ?: "TIMER"
         val inputHabitTitle = intent?.getStringExtra(EXTRA_HABIT_TITLE) ?: "Focus Session"
         val inputDuration = intent?.getIntExtra(EXTRA_DURATION_SECONDS, 25 * 60) ?: (25 * 60)
@@ -91,11 +105,51 @@ class FocusService : Service() {
         return START_NOT_STICKY
     }
 
+    private fun handleAction(action: String) {
+        serviceScope.launch {
+            val app = applicationContext as? LoopHabitApp ?: return@launch
+            val prefState = app.repository.focusStateFlow.first()
+            when (action) {
+                ACTION_PAUSE -> {
+                    isPaused.value = true
+                    app.repository.saveFocusState(prefState.copy(
+                        isRunning = false,
+                        pausedSeconds = if (mode.value == "TIMER") secondsLeft.value else secondsElapsed.value,
+                        baseTimestamp = System.currentTimeMillis()
+                    ))
+                    updateNotification(getNotificationText())
+                }
+                ACTION_RESUME -> {
+                    isPaused.value = false
+                    val currentSecs = if (mode.value == "TIMER") secondsLeft.value else secondsElapsed.value
+                    app.repository.saveFocusState(prefState.copy(
+                        isRunning = true,
+                        pausedSeconds = currentSecs,
+                        baseTimestamp = System.currentTimeMillis()
+                    ))
+                    updateNotification(getNotificationText())
+                }
+                ACTION_RESET -> {
+                    isPaused.value = false
+                    val defaultSecs = if (mode.value == "TIMER") prefState.initialDurationMinutes * 60 else 0
+                    app.repository.saveFocusState(prefState.copy(
+                        isRunning = false,
+                        pausedSeconds = defaultSecs
+                    ))
+                    stopSelf()
+                }
+            }
+        }
+    }
+
     private fun startTicking(modeStr: String) {
         timerJob?.cancel()
         timerJob = serviceScope.launch {
             while (isActive) {
                 delay(1000L)
+                if (isPaused.value) {
+                    continue
+                }
                 if (modeStr == "TIMER") {
                     if (secondsLeft.value > 0) {
                         secondsLeft.value -= 1
@@ -136,14 +190,31 @@ class FocusService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Active Focus Session")
             .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setOnlyAlertOnce(true)
-            .build()
+
+        // Add Pause or Resume action button
+        if (isPaused.value) {
+            val resumeIntent = Intent(this, FocusService::class.java).apply { action = ACTION_RESUME }
+            val pendingResume = PendingIntent.getService(this, 2, resumeIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            builder.addAction(android.R.drawable.ic_media_play, "Resume", pendingResume)
+        } else {
+            val pauseIntent = Intent(this, FocusService::class.java).apply { action = ACTION_PAUSE }
+            val pendingPause = PendingIntent.getService(this, 1, pauseIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            builder.addAction(android.R.drawable.ic_media_pause, "Pause", pendingPause)
+        }
+
+        // Add Reset action button
+        val resetIntent = Intent(this, FocusService::class.java).apply { action = ACTION_RESET }
+        val pendingReset = PendingIntent.getService(this, 3, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "Reset", pendingReset)
+
+        return builder.build()
     }
 
     private fun updateNotification(text: String) {
@@ -166,7 +237,16 @@ class FocusService : Service() {
     override fun onDestroy() {
         timerJob?.cancel()
         serviceScope.cancel()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(NOTIFICATION_ID)
         isServiceRunning.value = false
+        isPaused.value = false
         super.onDestroy()
     }
 
