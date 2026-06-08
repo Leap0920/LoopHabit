@@ -64,6 +64,7 @@ import androidx.compose.material.icons.outlined.MilitaryTech
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material.icons.outlined.OfflineBolt
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Timer
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -241,12 +242,24 @@ fun InsightsDashboard(
         Spacer(modifier = Modifier.height(20.dp))
 
         // Achievements Milestones Section
-        Text(
-            text = "🏆 Achievement Milestones",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.EmojiEvents,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Achievement Milestones",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
         Spacer(modifier = Modifier.height(10.dp))
         Row(
             modifier = Modifier
@@ -463,13 +476,25 @@ fun InsightsDashboard(
         Spacer(modifier = Modifier.height(20.dp))
 
         // Focus Session Analytics
-        Text(
-            text = "⏱️ Focus Session Analytics",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start,
             modifier = Modifier.padding(bottom = 10.dp)
-        )
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Timer,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Focus Session Analytics",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
 
         val allFocusSessions by viewModel.allFocusSessions.collectAsState()
         FocusAnalyticsSection(
@@ -558,19 +583,41 @@ fun InsightsDashboard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 if (current > 0) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.LocalFireDepartment,
+                                            contentDescription = "Current streak",
+                                            tint = parsedColor,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "$current d",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = parsedColor
+                                        )
+                                    }
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.EmojiEvents,
+                                        contentDescription = "Best streak",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp)
+                                    )
                                     Text(
-                                        text = "🔥 $current d",
+                                        text = "$best d",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp,
-                                        color = parsedColor
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                Text(
-                                    text = "🏆 $best d",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
                             }
                         }
                     }
@@ -1012,12 +1059,23 @@ fun MonthlyCalendarTab(
                                     fontSize = 13.sp,
                                     color = parsedColor
                                 )
-                                Text(
-                                    text = "✓ Completed",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF06D6A0)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.CheckCircle,
+                                        contentDescription = null,
+                                        tint = Color(0xFF06D6A0),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "Completed",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF06D6A0)
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
@@ -1421,7 +1479,18 @@ fun InsightsStatsTab(
                     modifier = Modifier.padding(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("🔥 Streak", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.LocalFireDepartment,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text("Streak", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("$currentStreak d", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = parsedColor)
                 }
@@ -1439,7 +1508,18 @@ fun InsightsStatsTab(
                     modifier = Modifier.padding(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("🏆 Best", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.EmojiEvents,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text("Best", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("$bestStreak d", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                 }
@@ -1457,7 +1537,18 @@ fun InsightsStatsTab(
                     modifier = Modifier.padding(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("✓ Total", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text("Total", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("$totalCompletions", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
                 }

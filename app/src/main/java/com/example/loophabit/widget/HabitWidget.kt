@@ -75,7 +75,7 @@ class HabitWidget : GlanceAppWidget() {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "🔒 Account Logged Out",
+                        text = "Account Logged Out",
                         style = TextStyle(
                             color = ColorProvider(Color.White),
                             fontWeight = FontWeight.Bold,
@@ -126,7 +126,7 @@ class HabitWidget : GlanceAppWidget() {
                                 ) {}
                                 Spacer(modifier = GlanceModifier.width(8.dp))
                                 Text(
-                                    text = "⚡ FOCUS MODE",
+                                    text = "FOCUS MODE",
                                     style = TextStyle(
                                         color = ColorProvider(Color(0xFF8338EC)),
                                         fontWeight = FontWeight.Bold,
@@ -189,7 +189,7 @@ class HabitWidget : GlanceAppWidget() {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "🎉 All done!",
+                        text = "All done!",
                         style = TextStyle(
                             color = ColorProvider(Color.White),
                             fontWeight = FontWeight.Bold,

@@ -29,6 +29,8 @@ import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Celebration
+import androidx.compose.material.icons.outlined.OfflineBolt
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -450,8 +452,15 @@ fun MainScreen(viewModel: HabitViewModel) {
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Celebration,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(48.dp)
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
                                             Text(
-                                                text = "🎉 All done!",
+                                                text = "All done!",
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 24.sp
                                             )
@@ -671,14 +680,26 @@ fun FocusModeOverlay(
                 .fillMaxSize()
                 .padding(horizontal = 20.dp)
         ) {
-            Text(
-                text = if (isCompleted) "🎉 Completed!" else "⚡ Focus Mode",
-                color = Color.White,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 28.sp,
-                textAlign = TextAlign.Center,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.padding(bottom = 32.dp)
-            )
+            ) {
+                Icon(
+                    imageVector = if (isCompleted) Icons.Outlined.Celebration else Icons.Outlined.OfflineBolt,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isCompleted) "Completed!" else "Focus Mode",
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 28.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
 
             Box(
                 modifier = Modifier
