@@ -403,6 +403,11 @@ fun SettingsDialog(
     var showResetConfirm by remember { mutableStateOf(false) }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
+    var latestUpdateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var showUpdateAvailableDialog by remember { mutableStateOf(false) }
+    var showDownloadProgressDialog by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0f) }
+
     val backupOptions = listOf(
         0 to "Disabled",
         6 to "6 Hours",
@@ -623,6 +628,75 @@ fun SettingsDialog(
                         }
                     }
 
+                    // App Updates Row
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f), shape = RoundedCornerShape(16.dp))
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "App Updates",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Current Version",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "v" + UpdateManager.getCurrentVersionName(context),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                var isCheckingUpdates by remember { mutableStateOf(false) }
+
+                                Button(
+                                    onClick = {
+                                        isCheckingUpdates = true
+                                        Toast.makeText(context, "Checking for updates...", Toast.LENGTH_SHORT).show()
+                                        coroutineScope.launch {
+                                            val updateInfo = UpdateManager.checkForUpdates()
+                                            isCheckingUpdates = false
+                                            if (updateInfo != null) {
+                                                val currentVer = UpdateManager.getCurrentVersionName(context)
+                                                if (UpdateManager.isNewerVersion(currentVer, updateInfo.versionName)) {
+                                                    latestUpdateInfo = updateInfo
+                                                    showUpdateAvailableDialog = true
+                                                } else {
+                                                    Toast.makeText(context, "Your app is up to date!", Toast.LENGTH_LONG).show()
+                                                }
+                                            } else {
+                                                Toast.makeText(context, "Failed to check for updates. Please try again.", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                    },
+                                    enabled = !isCheckingUpdates,
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(
+                                        text = if (isCheckingUpdates) "Checking..." else "Check for Updates",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Danger Zone / Reset App Row
                     item {
                         Card(
@@ -805,6 +879,114 @@ fun SettingsDialog(
                 }
             }
         )
+    }
+
+    if (showUpdateAvailableDialog && latestUpdateInfo != null) {
+        val update = latestUpdateInfo!!
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showUpdateAvailableDialog = false },
+            title = {
+                Text(
+                    text = "New Update Available!",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Version: ${update.versionName}",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    if (update.releaseNotes.isNotBlank()) {
+                        Text(
+                            text = "Release Notes:",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        Text(
+                            text = update.releaseNotes,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 6,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else {
+                        Text(
+                            text = "A new update is available. Do you want to download and install it now?",
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showUpdateAvailableDialog = false
+                        showDownloadProgressDialog = true
+                        downloadProgress = 0f
+                        coroutineScope.launch {
+                            val apkFile = UpdateManager.downloadApk(context, update.downloadUrl) { progress ->
+                                downloadProgress = progress
+                            }
+                            showDownloadProgressDialog = false
+                            if (apkFile != null) {
+                                UpdateManager.installApk(context, apkFile)
+                            } else {
+                                Toast.makeText(context, "Failed to download update APK.", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                ) {
+                    Text("Update Now", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUpdateAvailableDialog = false }) {
+                    Text("Later")
+                }
+            }
+        )
+    }
+
+    if (showDownloadProgressDialog) {
+        Dialog(
+            onDismissRequest = {},
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Downloading Update",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { downloadProgress },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${(downloadProgress * 100).roundToInt()}%",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
     }
 }
 
