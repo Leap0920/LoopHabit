@@ -31,6 +31,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -91,6 +92,7 @@ fun FocusScreen(viewModel: HabitViewModel) {
     }
 
     var showSuccessDialog by remember { mutableStateOf(false) }
+    var showCustomDurationDialog by remember { mutableStateOf(false) }
 
     // Recover running state if app was killed/restarted but preferences say it's running
     LaunchedEffect(persistedState) {
@@ -292,6 +294,10 @@ fun FocusScreen(viewModel: HabitViewModel) {
                     .size(240.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f), CircleShape)
                     .border(2.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), CircleShape)
+                    .clip(CircleShape)
+                    .clickable(enabled = !isServiceRunning && focusMode == "TIMER") {
+                        showCustomDurationDialog = true
+                    }
             ) {
                 // Progress indicator wrapping the circle
                 CircularProgressIndicator(
@@ -486,7 +492,10 @@ fun FocusScreen(viewModel: HabitViewModel) {
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            listOf(1, 15, 25, 45, 60).forEach { mins ->
+                            val presets = listOf(1, 15, 25, 45, 60)
+                            val isCustomSelected = initialDurationMinutes !in presets
+
+                            presets.forEach { mins ->
                                 val isSelected = initialDurationMinutes == mins
                                 Box(
                                     contentAlignment = Alignment.Center,
@@ -513,6 +522,27 @@ fun FocusScreen(viewModel: HabitViewModel) {
                                         color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
+                            }
+
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .weight(1.2f)
+                                    .height(36.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (isCustomSelected) parsedColor else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                                    )
+                                    .clickable(enabled = !isServiceRunning) {
+                                        showCustomDurationDialog = true
+                                    }
+                            ) {
+                                Text(
+                                    text = if (isCustomSelected) "${initialDurationMinutes}m" else "Custom",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = if (isCustomSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -730,6 +760,84 @@ fun FocusScreen(viewModel: HabitViewModel) {
                     onClick = {
                         showSuccessDialog = false
                     }
+                ) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        )
+    }
+
+    if (showCustomDurationDialog) {
+        var customMinutesText by remember { mutableStateOf(initialDurationMinutes.toString()) }
+        var isError by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showCustomDurationDialog = false },
+            title = {
+                Text(
+                    text = "Custom Duration",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter timer duration in minutes (1 - 999):",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = customMinutesText,
+                        onValueChange = { input ->
+                            if (input.all { it.isDigit() } && input.length <= 3) {
+                                customMinutesText = input
+                                isError = input.toIntOrNull()?.let { it < 1 } ?: true
+                            }
+                        },
+                        isError = isError,
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        placeholder = { Text("e.g. 30") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (isError) {
+                        Text(
+                            text = "Please enter a valid number between 1 and 999",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val mins = customMinutesText.toIntOrNull()
+                        if (mins != null && mins in 1..999) {
+                            viewModel.updateFocusState(
+                                persistedState.copy(
+                                    initialDurationMinutes = mins,
+                                    pausedSeconds = mins * 60
+                                )
+                            )
+                            showCustomDurationDialog = false
+                        } else {
+                            isError = true
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = parsedColor)
+                ) {
+                    Text("Set", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showCustomDurationDialog = false }
                 ) {
                     Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
