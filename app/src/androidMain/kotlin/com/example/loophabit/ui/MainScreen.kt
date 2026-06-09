@@ -166,16 +166,24 @@ fun MainScreen(viewModel: HabitViewModel) {
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            viewModel.importData(
-                context = context,
-                uri = uri,
-                onSuccess = {
-                    Toast.makeText(context, "Backup restored successfully!", Toast.LENGTH_LONG).show()
-                },
-                onError = { err ->
-                    Toast.makeText(context, "Failed to restore backup: $err", Toast.LENGTH_LONG).show()
+            try {
+                val jsonText = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                if (jsonText != null) {
+                    viewModel.importData(
+                        jsonString = jsonText,
+                        onSuccess = {
+                            Toast.makeText(context, "Backup restored successfully!", Toast.LENGTH_LONG).show()
+                        },
+                        onError = { err ->
+                            Toast.makeText(context, "Failed to restore backup: $err", Toast.LENGTH_LONG).show()
+                        }
+                    )
+                } else {
+                    Toast.makeText(context, "Failed to read backup file", Toast.LENGTH_LONG).show()
                 }
-            )
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error reading file: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 

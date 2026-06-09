@@ -13,6 +13,7 @@ import com.example.loophabit.data.SyncState
 import com.example.loophabit.data.sync.SyncManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import com.example.loophabit.ui.InsightsViewModel
+import com.example.loophabit.ui.LoopHabitViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -32,18 +33,18 @@ class HabitViewModel(
     private val repository: HabitRepository,
     private val syncManager: SyncManager,
     private val applicationContext: Context
-) : ViewModel(), InsightsViewModel {
+) : ViewModel(), LoopHabitViewModel {
 
-    val todayDate: String
+    override val todayDate: String
         get() = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
-    val currentUserId: StateFlow<Long> = repository.currentUserIdFlow
+    override val currentUserId: StateFlow<Long> = repository.currentUserIdFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
-    val autoBackupInterval: StateFlow<Int> = repository.autoBackupIntervalFlow
+    override val autoBackupInterval: StateFlow<Int> = repository.autoBackupIntervalFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    val autoBackupUri: StateFlow<String?> = repository.autoBackupUriFlow
+    override val autoBackupUri: StateFlow<String?> = repository.autoBackupUriFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
@@ -69,22 +70,23 @@ class HabitViewModel(
         }
     }
 
-    fun setAutoBackupInterval(intervalHours: Int) {
+    override fun setAutoBackupInterval(intervalHours: Int) {
         viewModelScope.launch {
             repository.setAutoBackupInterval(intervalHours)
             com.example.loophabit.data.sync.BackupWorker.scheduleAutoBackup(applicationContext, intervalHours)
         }
     }
 
-    fun setAutoBackupUri(uriString: String?) {
+    override fun setAutoBackupUri(uriString: String?) {
         viewModelScope.launch {
             repository.setAutoBackupUri(uriString)
         }
     }
 
-    fun exportData(context: Context) {
+    override fun exportData() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
+                val context = applicationContext
                 val userId = currentUserId.value
                 if (userId == 0L) return@launch
                 val habits = repository.getAllHabits(userId).first()
@@ -124,11 +126,10 @@ class HabitViewModel(
         }
     }
 
-    fun importData(
-        context: Context,
-        uri: android.net.Uri,
-        onSuccess: () -> Unit = {},
-        onError: (String) -> Unit = {}
+    override fun importData(
+        jsonString: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
     ) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
@@ -140,9 +141,7 @@ class HabitViewModel(
                     return@launch
                 }
 
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val jsonText = inputStream?.bufferedReader()?.use { it.readText() }
-                if (jsonText.isNullOrBlank()) {
+                if (jsonString.isBlank()) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                         onError("Backup file is empty")
                     }
@@ -150,7 +149,7 @@ class HabitViewModel(
                 }
 
                 val gson = com.google.gson.Gson()
-                val backupData = gson.fromJson(jsonText, com.example.loophabit.data.sync.BackupData::class.java)
+                val backupData = gson.fromJson(jsonString, com.example.loophabit.data.sync.BackupData::class.java)
 
                 if (backupData.habits == null) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -191,7 +190,7 @@ class HabitViewModel(
         }
     }
 
-    fun resetAllData(onSuccess: () -> Unit = {}) {
+    override fun resetAllData(onSuccess: () -> Unit) {
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
@@ -224,22 +223,22 @@ class HabitViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val incompleteHabits: StateFlow<List<Habit>> = currentUserId
+    override val incompleteHabits: StateFlow<List<Habit>> = currentUserId
         .flatMapLatest { userId ->
             if (userId == 0L) flowOf(emptyList()) else repository.getIncompleteHabitsOfToday(userId, todayDate)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val completedHabits: StateFlow<List<Habit>> = currentUserId
+    override val completedHabits: StateFlow<List<Habit>> = currentUserId
         .flatMapLatest { userId ->
             if (userId == 0L) flowOf(emptyList()) else repository.getCompletedHabitsOfToday(userId, todayDate)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val loopIndex: StateFlow<Int> = repository.loopIndexFlow
+    override val loopIndex: StateFlow<Int> = repository.loopIndexFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    val currentHabit: StateFlow<Habit?> = combine(
+    override val currentHabit: StateFlow<Habit?> = combine(
         incompleteHabits,
         repository.loopIndexFlow
     ) { habits, index ->
@@ -249,20 +248,20 @@ class HabitViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Sync state exposed to UI
-    val syncState: StateFlow<SyncState> = syncManager.syncState
+    override val syncState: StateFlow<SyncState> = syncManager.syncState
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SyncState.Idle)
 
     private val _focusHabitId = MutableStateFlow<Long?>(null)
-    val focusHabitId = _focusHabitId.asStateFlow()
+    override val focusHabitId = _focusHabitId.asStateFlow()
 
-    fun setFocusHabitId(id: Long?) {
+    override fun setFocusHabitId(id: Long?) {
         _focusHabitId.value = id
     }
 
-    val focusState: StateFlow<LoopPreferences.FocusState> = repository.focusStateFlow
+    override val focusState: StateFlow<LoopPreferences.FocusState> = repository.focusStateFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LoopPreferences.FocusState())
 
-    fun updateFocusState(state: LoopPreferences.FocusState) {
+    override fun updateFocusState(state: LoopPreferences.FocusState) {
         viewModelScope.launch {
             repository.saveFocusState(state)
         }
@@ -278,14 +277,14 @@ class HabitViewModel(
         }
     }
 
-    fun addHabit(
+    override fun addHabit(
         title: String,
         colorHex: String,
-        targetDaysPerWeek: Int = 7,
-        isNumerical: Boolean = false,
-        numericalGoal: Double = 0.0,
-        numericalUnit: String = "",
-        daysOfWeekPattern: String = "1111111"
+        targetDaysPerWeek: Int,
+        isNumerical: Boolean,
+        numericalGoal: Double,
+        numericalUnit: String,
+        daysOfWeekPattern: String
     ) {
         viewModelScope.launch {
             val userId = currentUserId.value
@@ -307,7 +306,7 @@ class HabitViewModel(
         }
     }
 
-    fun deleteHabit(habit: Habit) {
+    override fun deleteHabit(habit: Habit) {
         viewModelScope.launch {
             repository.deleteHabit(habit, todayDate)
             triggerSync()
@@ -315,7 +314,7 @@ class HabitViewModel(
         }
     }
 
-    fun completeHabit(habitId: Long) {
+    override fun completeHabit(habitId: Long) {
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
@@ -326,7 +325,7 @@ class HabitViewModel(
         }
     }
 
-    fun logFocusSession(habitId: Long?, durationSeconds: Int, details: String?) {
+    override fun logFocusSession(habitId: Long?, durationSeconds: Int, details: String?) {
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
@@ -337,7 +336,7 @@ class HabitViewModel(
         }
     }
 
-    fun uncompleteHabit(habitId: Long) {
+    override fun uncompleteHabit(habitId: Long) {
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
@@ -348,7 +347,7 @@ class HabitViewModel(
         }
     }
 
-    fun nextHabit() {
+    override fun nextHabit() {
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
@@ -359,7 +358,7 @@ class HabitViewModel(
         }
     }
 
-    fun prevHabit() {
+    override fun prevHabit() {
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
@@ -370,7 +369,7 @@ class HabitViewModel(
         }
     }
 
-    fun setIndex(index: Int) {
+    override fun setIndex(index: Int) {
         viewModelScope.launch {
             repository.setLoopIndex(index)
             triggerSync()
@@ -386,7 +385,7 @@ class HabitViewModel(
     }
 
     // Authentication Actions
-    fun login(usernameOrEmail: String, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    override fun login(usernameOrEmail: String, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             if (usernameOrEmail.isBlank() || password.isBlank()) {
                 onError("Please fill in all fields")
@@ -408,7 +407,7 @@ class HabitViewModel(
         }
     }
 
-    fun register(
+    override fun register(
         username: String,
         email: String,
         password: String,
@@ -455,7 +454,7 @@ class HabitViewModel(
         }
     }
 
-    fun getSecurityQuestion(email: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
+    override fun getSecurityQuestion(email: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             if (email.isBlank()) {
                 onError("Please enter your email")
@@ -470,7 +469,7 @@ class HabitViewModel(
         }
     }
 
-    fun resetPassword(
+    override fun resetPassword(
         email: String,
         answer: String,
         newPassword: String,
@@ -501,7 +500,7 @@ class HabitViewModel(
         }
     }
 
-    fun logout() {
+    override fun logout() {
         viewModelScope.launch {
             repository.setCurrentUserId(0L)
             repository.setLoopIndex(0)
@@ -509,18 +508,18 @@ class HabitViewModel(
         }
     }
 
-    fun getCompletionDates(habitId: Long): kotlinx.coroutines.flow.Flow<List<String>> =
+    override fun getCompletionDates(habitId: Long): kotlinx.coroutines.flow.Flow<List<String>> =
         repository.getCompletionDates(habitId)
 
-    fun getCompletionsForHabit(habitId: Long): kotlinx.coroutines.flow.Flow<List<com.example.loophabit.data.HabitCompletion>> =
+    override fun getCompletionsForHabit(habitId: Long): kotlinx.coroutines.flow.Flow<List<com.example.loophabit.data.HabitCompletion>> =
         repository.getCompletionsForHabit(habitId)
 
-    fun toggleHabitCompletionForDate(
+    override fun toggleHabitCompletionForDate(
         habitId: Long,
         dateStr: String,
         wasCompleted: Boolean,
-        notes: String? = null,
-        value: Double = 0.0
+        notes: String?,
+        value: Double
     ) {
         viewModelScope.launch {
             val userId = currentUserId.value
@@ -533,7 +532,7 @@ class HabitViewModel(
         }
     }
 
-    fun completeHabitNumerical(habitId: Long, value: Double, notes: String? = null) {
+    override fun completeHabitNumerical(habitId: Long, value: Double, notes: String?) {
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
@@ -544,7 +543,7 @@ class HabitViewModel(
         }
     }
 
-    fun saveCompletionNote(habitId: Long, dateStr: String, notes: String?, value: Double = 0.0) {
+    override fun saveCompletionNote(habitId: Long, dateStr: String, notes: String?, value: Double) {
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId == 0L) return@launch

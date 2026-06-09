@@ -611,7 +611,7 @@ fun SettingsDialog(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 Button(
-                                    onClick = { viewModel.exportData(context) },
+                                    onClick = { viewModel.exportData() },
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
