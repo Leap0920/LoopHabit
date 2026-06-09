@@ -1,5 +1,19 @@
+# Built artifacts
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the DB
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Android Studio / IntelliJ IDEA
+.idea/
 *.iml
-.gradle
+.gradle/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -7,9 +21,22 @@
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+
+# VS Code
+.vscode/
+
+# Build folders
+build/
+app/build/
+.cxx/
+.externalNativeBuild/
+
+# OS generated files
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+Thumbs.db
+desktop.ini
+
+# Log files and local test transcripts
+%USERPROFILE%/
+.openclaude/
+*.log
