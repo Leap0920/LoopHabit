@@ -428,7 +428,7 @@ fun FocusScreen(viewModel: HabitViewModel) {
                 }
 
                 // Finish / Complete Button (Visible in Stopwatch mode or early stop for timer)
-                val isTimerEarly = focusMode == "TIMER" && secondsLeft < (initialDurationMinutes * 60)
+                val isTimerEarly = isServiceRunning && focusMode == "TIMER" && secondsLeft < (initialDurationMinutes * 60)
                 val isStopwatchLogged = focusMode == "STOPWATCH" && secondsElapsed > 0
                 if (isTimerEarly || isStopwatchLogged) {
                     IconButton(

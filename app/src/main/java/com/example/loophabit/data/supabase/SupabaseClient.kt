@@ -72,33 +72,35 @@ object SupabaseClient {
     /**
      * Initializes the Supabase client with configuration from BuildConfig.
      * Must be called once during application startup (e.g., in Application.onCreate()).
+     * Safe to call multiple times - subsequent calls are no-ops.
      *
      * @param context Android context to access BuildConfig
-     * @throws IllegalStateException if already initialized
      */
     fun initialize(context: Context) {
-        if (isInitialized) {
-            throw IllegalStateException("SupabaseClient already initialized. Call initialize() only once.")
-        }
+        if (isInitialized) return
 
-        val supabaseUrl = com.example.loophabit.BuildConfig.SUPABASE_URL
-        val supabaseAnonKey = com.example.loophabit.BuildConfig.SUPABASE_ANON_KEY
+        synchronized(this) {
+            if (isInitialized) return
 
-        if (supabaseUrl.isBlank() || supabaseAnonKey.isBlank()) {
-            throw IllegalArgumentException(
-                "Supabase URL or Anon Key is missing. " +
-                "Ensure SUPABASE_URL and SUPABASE_ANON_KEY are defined in BuildConfig"
-            )
-        }
+            val supabaseUrl = com.example.loophabit.BuildConfig.SUPABASE_URL
+            val supabaseAnonKey = com.example.loophabit.BuildConfig.SUPABASE_ANON_KEY
 
-        client = createSupabaseClient(supabaseUrl, supabaseAnonKey) {
-            httpEngine = io.ktor.client.engine.okhttp.OkHttp.create()
-            install(Auth)
-            install(Postgrest)
-            install(Realtime)
-            install(Storage)
+            if (supabaseUrl.isBlank() || supabaseAnonKey.isBlank()) {
+                throw IllegalArgumentException(
+                    "Supabase URL or Anon Key is missing. " +
+                    "Ensure SUPABASE_URL and SUPABASE_ANON_KEY are defined in BuildConfig"
+                )
+            }
+
+            client = createSupabaseClient(supabaseUrl, supabaseAnonKey) {
+                httpEngine = io.ktor.client.engine.okhttp.OkHttp.create()
+                install(Auth)
+                install(Postgrest)
+                install(Realtime)
+                install(Storage)
+            }
+            isInitialized = true
         }
-        isInitialized = true
     }
 
     /**

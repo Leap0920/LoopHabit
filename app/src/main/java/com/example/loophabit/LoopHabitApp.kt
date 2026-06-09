@@ -63,4 +63,10 @@ class LoopHabitApp : Application() {
         // Clean up network callback
         SyncScheduler.unregisterNetworkCallback(this)
     }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        // Clean up network callback on memory pressure (onTerminate is never called on real devices)
+        SyncScheduler.unregisterNetworkCallback(this)
+    }
 }

@@ -573,8 +573,6 @@ fun MainScreen(viewModel: HabitViewModel) {
 
     val focusHabitId by viewModel.focusHabitId.collectAsState()
     val focusHabit = allHabits.find { it.id == focusHabitId }
-    val completedHabits by viewModel.completedHabits.collectAsState()
-    val incompleteHabits by viewModel.incompleteHabits.collectAsState()
 
     if (focusHabit != null) {
         val isCompleted = completedHabits.any { it.id == focusHabit.id }

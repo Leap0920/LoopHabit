@@ -27,6 +27,8 @@ class AuthRepository private constructor(
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unknown)
     val authState = _authState.asStateFlow()
 
+    private var authJob: kotlinx.coroutines.Job? = null
+
     init {
         if (!SupabaseClient.isInitialized()) {
             SupabaseClient.initialize(context)
@@ -54,7 +56,8 @@ class AuthRepository private constructor(
 
     /** Listen to auth state changes via sessionStatus StateFlow and update flows. */
     private fun listenToAuthChanges() {
-        CoroutineScope(Dispatchers.IO).launch {
+        authJob?.cancel()
+        authJob = CoroutineScope(Dispatchers.IO).launch {
             SupabaseClient.auth.sessionStatus.collect { status ->
                 when (status) {
                     is SessionStatus.Authenticated -> {
@@ -77,6 +80,12 @@ class AuthRepository private constructor(
                 }
             }
         }
+    }
+
+    /** Cancel background auth listener to prevent coroutine leak. */
+    fun destroy() {
+        authJob?.cancel()
+        authJob = null
     }
 
     /** Sign up with email, password, and metadata. */
@@ -117,15 +126,24 @@ class AuthRepository private constructor(
                 this.email = email
                 this.password = password
             }
-            // signInWith is non-blocking; the session is published via sessionStatus.
-            // Read it back to surface a user object immediately.
+            // signInWith completes the sign-in; the session is published via sessionStatus.
+            // Read currentSessionOrNull to surface the user object immediately.
             val user = SupabaseClient.auth.currentSessionOrNull()?.user
             if (user != null) {
                 _currentUser.value = user
                 _authState.value = AuthState.Authenticated(user)
                 Result.success(user)
             } else {
-                Result.failure(Exception("Sign in succeeded but no user returned"))
+                // Fallback: wait briefly for sessionStatus to update
+                kotlinx.coroutines.delay(500)
+                val delayedUser = SupabaseClient.auth.currentSessionOrNull()?.user
+                if (delayedUser != null) {
+                    _currentUser.value = delayedUser
+                    _authState.value = AuthState.Authenticated(delayedUser)
+                    Result.success(delayedUser)
+                } else {
+                    Result.failure(Exception("Sign in succeeded but no user returned"))
+                }
             }
         } catch (e: Exception) {
             _authState.value = AuthState.Error(e.message ?: "Sign in failed")
@@ -195,13 +213,7 @@ class AuthRepository private constructor(
     /** Get current user ID as UUID string (for use with profiles table). */
     val currentUserId: String?
         get() {
-            val user = _currentUser.value
-            return if (user != null) {
-                try {
-                    (user.javaClass.getDeclaredField("id").apply { isAccessible = true }.get(user)).toString()
-                } catch (e: Exception) {
-                    null
-                }
-            } else null
+            val user = _currentUser.value as? UserInfo
+            return user?.id
         }
 }

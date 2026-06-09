@@ -84,9 +84,18 @@ class ReminderWorker(
         fun scheduleDailyReminder(context: Context) {
             val workManager = WorkManager.getInstance(context)
 
+            // Calculate delay until next 8:00 PM
+            val now = java.time.LocalDateTime.now()
+            var next8PM = now.toLocalDate().atTime(20, 0)
+            if (now.isAfter(next8PM)) {
+                next8PM = next8PM.plusDays(1)
+            }
+            val delayMinutes = java.time.Duration.between(now, next8PM).toMinutes()
+
             val reminderRequest = PeriodicWorkRequestBuilder<ReminderWorker>(
-                3, TimeUnit.HOURS
+                24, TimeUnit.HOURS
             )
+            .setInitialDelay(delayMinutes, TimeUnit.MINUTES)
             .build()
 
             workManager.enqueueUniquePeriodicWork(

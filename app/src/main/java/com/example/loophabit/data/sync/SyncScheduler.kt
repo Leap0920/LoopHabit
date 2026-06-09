@@ -122,7 +122,7 @@ object SyncScheduler {
      * @param context Application context
      * @return true if sync work is scheduled/running
      */
-    suspend fun isSyncWorkScheduled(context: Context): Boolean {
+    fun isSyncWorkScheduled(context: Context): Boolean {
         val workManager = WorkManager.getInstance(context)
         val workInfos = workManager.getWorkInfosByTagLiveData(SyncWorker.WORK_TAG).value
         return workInfos?.any { it.state.isFinished == false } ?: false

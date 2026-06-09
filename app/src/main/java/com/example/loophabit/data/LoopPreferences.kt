@@ -21,6 +21,16 @@ class LoopPreferences(private val context: Context) {
         val DARK_MODE_KEY = booleanPreferencesKey("dark_mode_enabled")
         val AUTO_BACKUP_INTERVAL_KEY = intPreferencesKey("auto_backup_interval")
         val AUTO_BACKUP_URI_KEY = stringPreferencesKey("auto_backup_uri")
+
+        // Focus state keys (avoid creating new key objects on every read/write)
+        val FOCUS_IS_RUNNING_KEY = booleanPreferencesKey("focus_is_running")
+        val FOCUS_MODE_KEY = stringPreferencesKey("focus_mode")
+        val FOCUS_HABIT_ID_KEY = longPreferencesKey("focus_habit_id")
+        val FOCUS_HABIT_TITLE_KEY = stringPreferencesKey("focus_habit_title")
+        val FOCUS_TASK_DETAILS_KEY = stringPreferencesKey("focus_task_details")
+        val FOCUS_INITIAL_DURATION_KEY = intPreferencesKey("focus_initial_duration_minutes")
+        val FOCUS_PAUSED_SECONDS_KEY = intPreferencesKey("focus_paused_seconds")
+        val FOCUS_BASE_TIMESTAMP_KEY = longPreferencesKey("focus_base_timestamp")
     }
 
     val loopIndexFlow: Flow<Int> = context.dataStore.data
@@ -51,27 +61,27 @@ class LoopPreferences(private val context: Context) {
     val focusStateFlow: Flow<FocusState> = context.dataStore.data
         .map { preferences ->
             FocusState(
-                isRunning = preferences[booleanPreferencesKey("focus_is_running")] ?: false,
-                mode = preferences[stringPreferencesKey("focus_mode")] ?: "TIMER",
-                habitId = preferences[longPreferencesKey("focus_habit_id")] ?: 0L,
-                habitTitle = preferences[stringPreferencesKey("focus_habit_title")] ?: "",
-                taskDetails = preferences[stringPreferencesKey("focus_task_details")] ?: "",
-                initialDurationMinutes = preferences[intPreferencesKey("focus_initial_duration_minutes")] ?: 25,
-                pausedSeconds = preferences[intPreferencesKey("focus_paused_seconds")] ?: (25 * 60),
-                baseTimestamp = preferences[longPreferencesKey("focus_base_timestamp")] ?: 0L
+                isRunning = preferences[FOCUS_IS_RUNNING_KEY] ?: false,
+                mode = preferences[FOCUS_MODE_KEY] ?: "TIMER",
+                habitId = preferences[FOCUS_HABIT_ID_KEY] ?: 0L,
+                habitTitle = preferences[FOCUS_HABIT_TITLE_KEY] ?: "",
+                taskDetails = preferences[FOCUS_TASK_DETAILS_KEY] ?: "",
+                initialDurationMinutes = preferences[FOCUS_INITIAL_DURATION_KEY] ?: 25,
+                pausedSeconds = preferences[FOCUS_PAUSED_SECONDS_KEY] ?: (25 * 60),
+                baseTimestamp = preferences[FOCUS_BASE_TIMESTAMP_KEY] ?: 0L
             )
         }
 
     suspend fun saveFocusState(state: FocusState) {
         context.dataStore.edit { preferences ->
-            preferences[booleanPreferencesKey("focus_is_running")] = state.isRunning
-            preferences[stringPreferencesKey("focus_mode")] = state.mode
-            preferences[longPreferencesKey("focus_habit_id")] = state.habitId
-            preferences[stringPreferencesKey("focus_habit_title")] = state.habitTitle
-            preferences[stringPreferencesKey("focus_task_details")] = state.taskDetails
-            preferences[intPreferencesKey("focus_initial_duration_minutes")] = state.initialDurationMinutes
-            preferences[intPreferencesKey("focus_paused_seconds")] = state.pausedSeconds
-            preferences[longPreferencesKey("focus_base_timestamp")] = state.baseTimestamp
+            preferences[FOCUS_IS_RUNNING_KEY] = state.isRunning
+            preferences[FOCUS_MODE_KEY] = state.mode
+            preferences[FOCUS_HABIT_ID_KEY] = state.habitId
+            preferences[FOCUS_HABIT_TITLE_KEY] = state.habitTitle
+            preferences[FOCUS_TASK_DETAILS_KEY] = state.taskDetails
+            preferences[FOCUS_INITIAL_DURATION_KEY] = state.initialDurationMinutes
+            preferences[FOCUS_PAUSED_SECONDS_KEY] = state.pausedSeconds
+            preferences[FOCUS_BASE_TIMESTAMP_KEY] = state.baseTimestamp
         }
     }
 

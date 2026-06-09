@@ -17,7 +17,8 @@ import androidx.room.PrimaryKey
     ],
     indices = [
         Index(value = ["habitId"]),
-        Index(value = ["date"])
+        Index(value = ["date"]),
+        Index(value = ["habitId", "date"], unique = true)
     ]
 )
 data class HabitCompletion(

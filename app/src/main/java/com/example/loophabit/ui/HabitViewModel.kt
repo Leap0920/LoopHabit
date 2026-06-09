@@ -166,7 +166,7 @@ class HabitViewModel(
                     repository.insertHabitDirect(habit.copy(userId = userId))
                 }
 
-                // 2. Insert completions
+                // 2. Insert completions (reassign userId context via the habit's owner)
                 backupData.completions?.forEach { completion ->
                     repository.insertCompletionDirect(completion)
                 }
@@ -195,7 +195,7 @@ class HabitViewModel(
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.clearUserData(userId)
-                repository.setCurrentUserId(userId)
+                repository.setCurrentUserId(0L)
                 repository.setLoopIndex(0)
                 repository.setAutoBackupInterval(0)
                 com.example.loophabit.data.sync.BackupWorker.cancelAutoBackup(applicationContext)
@@ -330,6 +330,8 @@ class HabitViewModel(
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.logFocusSession(userId, habitId, durationSeconds, details)
+                triggerSync()
+                updateWidget()
             }
         }
     }

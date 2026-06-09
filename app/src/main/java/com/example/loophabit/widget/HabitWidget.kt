@@ -1,13 +1,11 @@
 package com.example.loophabit.widget
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.content.Intent
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.action.actionParametersOf
@@ -26,6 +24,7 @@ import androidx.glance.unit.ColorProvider
 import com.example.loophabit.LoopHabitApp
 import com.example.loophabit.MainActivity
 import com.example.loophabit.data.Habit
+import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,21 +32,35 @@ import java.util.Locale
 class HabitWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        // Collect all data in the suspend function before rendering
+        val app = context.applicationContext as LoopHabitApp
+        val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+        val currentUserId = app.repository.currentUserIdFlow.first()
+        val incompleteHabits = if (currentUserId != 0L) {
+            app.repository.getIncompleteHabitsOfToday(currentUserId, todayDate).first()
+        } else {
+            emptyList()
+        }
+        val loopIndex = app.repository.loopIndexFlow.first()
+
         provideContent {
-            WidgetContent(context)
+            WidgetContent(
+                context = context,
+                currentUserId = currentUserId,
+                incompleteHabits = incompleteHabits,
+                loopIndex = loopIndex
+            )
         }
     }
 
     @Composable
-    private fun WidgetContent(context: Context) {
-        val app = context.applicationContext as LoopHabitApp
-        val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-
-        val currentUserId by app.repository.currentUserIdFlow.collectAsState(initial = 0L)
-        val incompleteHabits by app.repository.getIncompleteHabitsOfToday(currentUserId, todayDate)
-            .collectAsState(initial = emptyList())
-        val loopIndex by app.repository.loopIndexFlow.collectAsState(initial = 0)
-
+    private fun WidgetContent(
+        context: Context,
+        currentUserId: Long,
+        incompleteHabits: List<Habit>,
+        loopIndex: Int
+    ) {
         val size = incompleteHabits.size
         val activeIndex = if (size > 0) ((loopIndex % size) + size) % size else 0
         val activeHabit = if (size > 0) incompleteHabits[activeIndex] else null
@@ -67,7 +80,7 @@ class HabitWidget : GlanceAppWidget() {
                 Column(
                     modifier = GlanceModifier
                         .fillMaxSize()
-                        .background(ColorProvider(Color(0xFF1E1E1E)))
+                        .background(ColorProvider(androidx.compose.ui.graphics.Color(0xFF1E1E1E)))
                         .cornerRadius(24.dp)
                         .clickable(actionStartActivity(intent))
                         .padding(16.dp),
@@ -77,7 +90,7 @@ class HabitWidget : GlanceAppWidget() {
                     Text(
                         text = "Account Logged Out",
                         style = TextStyle(
-                            color = ColorProvider(Color.White),
+                            color = ColorProvider(androidx.compose.ui.graphics.Color.White),
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp
                         )
@@ -86,22 +99,22 @@ class HabitWidget : GlanceAppWidget() {
                     Text(
                         text = "Please log in to track habits.",
                         style = TextStyle(
-                            color = ColorProvider(Color.Gray),
+                            color = ColorProvider(androidx.compose.ui.graphics.Color.Gray),
                             fontSize = 11.sp
                         )
                     )
                 }
             } else if (activeHabit != null) {
                 val parsedColor = try {
-                    Color(android.graphics.Color.parseColor(activeHabit.colorHex))
+                    androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(activeHabit.colorHex))
                 } catch (e: Exception) {
-                    Color(0xFF8338EC)
+                    androidx.compose.ui.graphics.Color(0xFF8338EC)
                 }
 
                 Row(
                     modifier = GlanceModifier
                         .fillMaxSize()
-                        .background(ColorProvider(Color(0xFF1E1E1E)))
+                        .background(ColorProvider(androidx.compose.ui.graphics.Color(0xFF1E1E1E)))
                         .cornerRadius(24.dp)
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -128,7 +141,7 @@ class HabitWidget : GlanceAppWidget() {
                                 Text(
                                     text = "FOCUS MODE",
                                     style = TextStyle(
-                                        color = ColorProvider(Color(0xFF8338EC)),
+                                        color = ColorProvider(androidx.compose.ui.graphics.Color(0xFF8338EC)),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp
                                     )
@@ -138,7 +151,7 @@ class HabitWidget : GlanceAppWidget() {
                             Text(
                                 text = activeHabit.title,
                                 style = TextStyle(
-                                    color = ColorProvider(Color.White),
+                                    color = ColorProvider(androidx.compose.ui.graphics.Color.White),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp
                                 ),
@@ -148,7 +161,7 @@ class HabitWidget : GlanceAppWidget() {
                             Text(
                                 text = "Tap to open app & focus",
                                 style = TextStyle(
-                                    color = ColorProvider(Color.Gray),
+                                    color = ColorProvider(androidx.compose.ui.graphics.Color.Gray),
                                     fontSize = 10.sp
                                 )
                             )
@@ -181,7 +194,7 @@ class HabitWidget : GlanceAppWidget() {
                 Column(
                     modifier = GlanceModifier
                         .fillMaxSize()
-                        .background(ColorProvider(Color(0xFF1E1E1E)))
+                        .background(ColorProvider(androidx.compose.ui.graphics.Color(0xFF1E1E1E)))
                         .cornerRadius(24.dp)
                         .clickable(actionStartActivity(intent))
                         .padding(16.dp),
@@ -191,7 +204,7 @@ class HabitWidget : GlanceAppWidget() {
                     Text(
                         text = "All done!",
                         style = TextStyle(
-                            color = ColorProvider(Color.White),
+                            color = ColorProvider(androidx.compose.ui.graphics.Color.White),
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
@@ -200,7 +213,7 @@ class HabitWidget : GlanceAppWidget() {
                     Text(
                         text = "You've completed all habits today.",
                         style = TextStyle(
-                            color = ColorProvider(Color.Gray),
+                            color = ColorProvider(androidx.compose.ui.graphics.Color.Gray),
                             fontSize = 12.sp
                         )
                     )

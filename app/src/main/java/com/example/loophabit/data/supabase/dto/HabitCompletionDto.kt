@@ -1,33 +1,37 @@
 package com.example.loophabit.data.supabase.dto
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
 /**
  * Data Transfer Object representing a Habit Completion in Supabase.
- * Matches the 'habit_completions' table structure.
+ * Uses String types for serialization safety with both Gson and kotlinx.serialization.
  */
+@Serializable
 data class HabitCompletionDto(
-    @SerializedName("id") val id: UUID,
-    @SerializedName("habit_id") val habitId: UUID,
-    @SerializedName("date") val date: LocalDate,
-    @SerializedName("notes") val notes: String?,
-    @SerializedName("created_at") val createdAt: Instant
+    val id: String,
+    val habit_id: String,
+    val date: String,
+    val notes: String? = null,
+    val created_at: String,
+    val value: Double = 0.0
 ) {
     companion object {
         fun create(
             habitId: UUID,
             date: LocalDate,
-            notes: String? = null
+            notes: String? = null,
+            value: Double = 0.0
         ): HabitCompletionDto {
             return HabitCompletionDto(
-                id = UUID.randomUUID(),
-                habitId = habitId,
-                date = date,
+                id = UUID.randomUUID().toString(),
+                habit_id = habitId.toString(),
+                date = date.toString(),
                 notes = notes,
-                createdAt = Instant.now()
+                created_at = Instant.now().toString(),
+                value = value
             )
         }
     }

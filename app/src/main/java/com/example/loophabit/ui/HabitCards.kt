@@ -111,6 +111,7 @@ fun SwipeableCard(
                     },
                     onDrag = { change, dragAmount ->
                         change.consume()
+                        // Use the pointerInput coroutine context directly - no need to launch
                         coroutineScope.launch {
                             swipeOffset.snapTo(swipeOffset.value + dragAmount.x)
                         }

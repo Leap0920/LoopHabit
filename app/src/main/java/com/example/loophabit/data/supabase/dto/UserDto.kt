@@ -1,21 +1,23 @@
 package com.example.loophabit.data.supabase.dto
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.util.UUID
 
 /**
  * Data Transfer Object representing a User profile in Supabase.
+ * Uses String types for serialization safety with both Gson and kotlinx.serialization.
  * This is for the custom 'profiles' table (not auth.users which is managed by Supabase Auth).
  */
+@Serializable
 data class UserDto(
-    @SerializedName("id") val id: UUID,
-    @SerializedName("email") val email: String,
-    @SerializedName("username") val username: String,
-    @SerializedName("security_question") val securityQuestion: String,
-    @SerializedName("security_answer_hash") val securityAnswerHash: String,
-    @SerializedName("created_at") val createdAt: Instant,
-    @SerializedName("updated_at") val updatedAt: Instant
+    val id: String,
+    val email: String,
+    val username: String,
+    val security_question: String,
+    val security_answer_hash: String,
+    val created_at: String,
+    val updated_at: String
 ) {
     companion object {
         fun create(
@@ -25,15 +27,15 @@ data class UserDto(
             securityQuestion: String,
             securityAnswerHash: String
         ): UserDto {
-            val now = Instant.now()
+            val now = Instant.now().toString()
             return UserDto(
-                id = id,
+                id = id.toString(),
                 email = email,
                 username = username,
-                securityQuestion = securityQuestion,
-                securityAnswerHash = securityAnswerHash,
-                createdAt = now,
-                updatedAt = now
+                security_question = securityQuestion,
+                security_answer_hash = securityAnswerHash,
+                created_at = now,
+                updated_at = now
             )
         }
     }

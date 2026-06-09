@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import com.example.loophabit.MainActivity
 import com.example.loophabit.LoopHabitApp
@@ -19,6 +20,7 @@ class FocusService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var timerJob: Job? = null
+    private var baseTimeMillis: Long = 0L
 
     companion object {
         const val CHANNEL_ID = "focus_service_channel"
@@ -95,8 +97,10 @@ class FocusService : Service() {
 
         if (inputMode == "TIMER") {
             secondsLeft.value = inputSecLeft
+            baseTimeMillis = SystemClock.elapsedRealtime() + (inputSecLeft * 1000L)
         } else {
             secondsElapsed.value = inputSecElapsed
+            baseTimeMillis = SystemClock.elapsedRealtime() - (inputSecElapsed * 1000L)
         }
 
         startForeground(NOTIFICATION_ID, buildNotification(getNotificationText()))
@@ -122,6 +126,11 @@ class FocusService : Service() {
                 ACTION_RESUME -> {
                     isPaused.value = false
                     val currentSecs = if (mode.value == "TIMER") secondsLeft.value else secondsElapsed.value
+                    if (mode.value == "TIMER") {
+                        baseTimeMillis = SystemClock.elapsedRealtime() + (currentSecs * 1000L)
+                    } else {
+                        baseTimeMillis = SystemClock.elapsedRealtime() - (currentSecs * 1000L)
+                    }
                     app.repository.saveFocusState(prefState.copy(
                         isRunning = true,
                         pausedSeconds = currentSecs,
@@ -145,22 +154,39 @@ class FocusService : Service() {
     private fun startTicking(modeStr: String) {
         timerJob?.cancel()
         timerJob = serviceScope.launch {
+            val now = SystemClock.elapsedRealtime()
+            if (modeStr == "TIMER") {
+                baseTimeMillis = now + (secondsLeft.value * 1000L)
+            } else {
+                baseTimeMillis = now - (secondsElapsed.value * 1000L)
+            }
+
             while (isActive) {
                 delay(1000L)
                 if (isPaused.value) {
                     continue
                 }
+                val currentRealtime = SystemClock.elapsedRealtime()
                 if (modeStr == "TIMER") {
-                    if (secondsLeft.value > 0) {
-                        secondsLeft.value -= 1
-                        updateNotification(getNotificationText())
-                        if (secondsLeft.value == 0) {
-                            updateNotification("Focus Session Complete!")
-                            break
+                    val remaining = ((baseTimeMillis - currentRealtime) / 1000L).toInt()
+                    secondsLeft.value = Math.max(0, remaining)
+                    updateNotification(getNotificationText())
+                    if (secondsLeft.value == 0) {
+                        updateNotification("Focus Session Complete!")
+                        // Persist completion state so recovery logic doesn't double-log
+                        val app = applicationContext as? LoopHabitApp
+                        if (app != null) {
+                            val prefState = app.repository.focusStateFlow.first()
+                            app.repository.saveFocusState(prefState.copy(isRunning = false))
                         }
+                        // Stop the service when timer completes
+                        delay(500L) // Brief delay so notification is visible
+                        stopSelf()
+                        break
                     }
                 } else {
-                    secondsElapsed.value += 1
+                    val elapsed = ((currentRealtime - baseTimeMillis) / 1000L).toInt()
+                    secondsElapsed.value = elapsed
                     updateNotification(getNotificationText())
                 }
             }
