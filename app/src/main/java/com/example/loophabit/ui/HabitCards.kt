@@ -288,76 +288,80 @@ fun CompletedHabitRow(
     }
 
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(parsedColor)
+            // Color indicator dot
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(parsedColor)
+            )
+
+            // Habit info
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = habit.title,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Column(modifier = Modifier.weight(1f)) {
+                if (showManualTimeAction && manualMinutes > 0) {
                     Text(
-                        text = habit.title,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = "${manualMinutes}m focus",
+                        fontSize = 11.sp,
+                        color = parsedColor.copy(alpha = 0.8f),
+                        maxLines = 1
                     )
-                    if (showManualTimeAction) {
-                        Text(
-                            text = if (manualMinutes > 0) "Manual focus: ${manualMinutes}m" else "Add focus time",
-                            fontSize = 12.sp,
-                            color = parsedColor.copy(alpha = 0.8f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                }
+            }
+
+            // Action buttons row
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (showManualTimeAction) {
+                    IconButton(
+                        onClick = onEditManualTime,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .background(parsedColor.copy(alpha = 0.12f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Timer,
+                            contentDescription = "Add focus time",
+                            tint = parsedColor,
+                            modifier = Modifier.size(17.dp)
                         )
                     }
                 }
-            }
-            if (showManualTimeAction) {
                 IconButton(
-                    onClick = onEditManualTime,
+                    onClick = onUncomplete,
                     modifier = Modifier
-                        .size(32.dp)
-                        .background(parsedColor.copy(alpha = 0.1f), CircleShape)
+                        .size(34.dp)
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f), CircleShape)
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Timer,
-                        contentDescription = "Add manual focus time",
-                        tint = parsedColor,
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = "Undo",
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                         modifier = Modifier.size(16.dp)
                     )
                 }
-            }
-            IconButton(
-                onClick = onUncomplete,
-                modifier = Modifier
-                    .size(24.dp)
-                    .background(parsedColor.copy(alpha = 0.1f), CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = "Undo completion",
-                    tint = parsedColor,
-                    modifier = Modifier.size(14.dp)
-                )
             }
         }
     }

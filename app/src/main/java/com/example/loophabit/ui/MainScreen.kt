@@ -237,25 +237,49 @@ fun MainScreen(viewModel: HabitViewModel) {
                     NavigationBarItem(
                         selected = activeTab == "TODAY",
                         onClick = { activeTab = "TODAY" },
-                        icon = { Icon(Icons.Outlined.Home, contentDescription = "Today") },
+                        icon = {
+                            Icon(
+                                Icons.Outlined.Home,
+                                contentDescription = "Today",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
                         label = { Text("Today", fontWeight = FontWeight.Bold) }
                     )
                     NavigationBarItem(
                         selected = activeTab == "FOCUS",
                         onClick = { activeTab = "FOCUS" },
-                        icon = { Icon(Icons.Outlined.Timer, contentDescription = "Focus") },
+                        icon = {
+                            Icon(
+                                Icons.Outlined.Timer,
+                                contentDescription = "Focus",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
                         label = { Text("Focus", fontWeight = FontWeight.Bold) }
                     )
                     NavigationBarItem(
                         selected = activeTab == "TODO",
                         onClick = { activeTab = "TODO" },
-                        icon = { Icon(Icons.Outlined.CheckCircle, contentDescription = "Todo") },
+                        icon = {
+                            Icon(
+                                Icons.Outlined.CheckCircle,
+                                contentDescription = "Todo",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
                         label = { Text("Todo", fontWeight = FontWeight.Bold) }
                     )
                     NavigationBarItem(
                         selected = activeTab == "INSIGHTS",
                         onClick = { activeTab = "INSIGHTS" },
-                        icon = { Icon(Icons.Outlined.DateRange, contentDescription = "Insights") },
+                        icon = {
+                            Icon(
+                                Icons.Outlined.DateRange,
+                                contentDescription = "Insights",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
                         label = { Text("Insights", fontWeight = FontWeight.Bold) }
                     )
                 }
