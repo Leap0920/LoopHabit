@@ -5,6 +5,7 @@ import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.example.loophabit.data.Habit
 import com.example.loophabit.data.HabitRepository
 import com.example.loophabit.data.TodoItem
@@ -171,49 +172,50 @@ class HabitViewModel(
                     return@launch
                 }
 
-                // Restore database in repository
-                repository.clearUserData(userId)
+                // Restore database in repository — wrap in a transaction so FK checks are deferred
+                val database = com.example.loophabit.data.AppDatabase.getDatabase(applicationContext)
+                database.withTransaction {
+                    // Ensure user exists — stale userId from DataStore after DB recreation causes FK failure
+                    val existingUser = repository.getUserById(userId)
+                    if (existingUser == null) {
+                        val fallbackUser = com.example.loophabit.data.User(
+                            username = "local_user",
+                            email = "local@loophabit.com",
+                            password = "local_password",
+                            securityQuestion = "Local?",
+                            securityAnswer = "Yes"
+                        )
+                        repository.registerUser(fallbackUser)
+                        repository.setCurrentUserId(userId)
+                    }
 
-                val habitIdMap = mutableMapOf<Long, Long>()
+                    repository.clearUserData(userId)
 
-                // 1. Insert habits
-                backupData.habits.forEach { habit ->
-                    try {
+                    val habitIdMap = mutableMapOf<Long, Long>()
+
+                    // 1. Insert habits
+                    backupData.habits.forEach { habit ->
                         val newId = repository.insertHabitDirect(habit.copy(id = 0, userId = userId))
                         habitIdMap[habit.id] = newId
-                    } catch (e: Exception) {
-                        // Skip individual habit if it fails (e.g., corrupt data)
                     }
-                }
 
-                // 2. Insert completions (reassign userId context via the habit's owner)
-                backupData.completions?.forEach { completion ->
-                    try {
+                    // 2. Insert completions (reassign userId context via the habit's owner)
+                    backupData.completions?.forEach { completion ->
                         val remappedHabitId = habitIdMap[completion.habitId]
                         if (remappedHabitId != null) {
                             repository.insertCompletionDirect(completion.copy(id = 0, habitId = remappedHabitId))
                         }
-                    } catch (e: Exception) {
-                        // Skip individual completion if it fails
                     }
-                }
 
-                // 3. Insert focus sessions
-                backupData.focusSessions?.forEach { session ->
-                    try {
+                    // 3. Insert focus sessions
+                    backupData.focusSessions?.forEach { session ->
                         val remappedHabitId = session.habitId?.let { habitIdMap[it] }
                         repository.insertFocusSessionDirect(session.copy(id = 0, userId = userId, habitId = remappedHabitId))
-                    } catch (e: Exception) {
-                        // Skip individual session if it fails
                     }
-                }
 
-                // 4. Insert todos
-                backupData.todos?.forEach { todo ->
-                    try {
+                    // 4. Insert todos
+                    backupData.todos?.forEach { todo ->
                         repository.insertTodoDirect(todo.copy(id = 0, userId = userId))
-                    } catch (e: Exception) {
-                        // Skip individual todo if it fails
                     }
                 }
 

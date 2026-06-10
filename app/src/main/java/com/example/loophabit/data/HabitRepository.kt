@@ -111,6 +111,8 @@ class HabitRepository(
 
     suspend fun getUserByUsername(username: String): User? = userDao.getUserByUsername(username)
 
+    suspend fun getUserById(userId: Long): User? = userDao.getUserById(userId)
+
     suspend fun registerUser(user: User): Long = userDao.insertUser(user)
 
     suspend fun updateUser(user: User): Int = userDao.updateUser(user)

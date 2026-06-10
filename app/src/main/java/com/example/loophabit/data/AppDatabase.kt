@@ -59,6 +59,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "LoopHabit"
                 )
                 .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+                .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
                 INSTANCE = instance
                 instance
