@@ -32,11 +32,13 @@ class BackupWorker(
             val habits = repository.getAllHabits(userId).first()
             val completions = repository.getAllCompletionsForUser(userId).first()
             val focusSessions = repository.getAllFocusSessions(userId).first()
+            val todos = repository.getTodosForUser(userId).first()
 
             val backupMap = mapOf(
                 "habits" to habits,
                 "completions" to completions,
-                "focusSessions" to focusSessions
+                "focusSessions" to focusSessions,
+                "todos" to todos
             )
 
             val jsonString = GsonBuilder().setPrettyPrinting().create().toJson(backupMap)

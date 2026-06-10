@@ -34,7 +34,7 @@ class LoopHabitApp : Application() {
         )
     }
 
-    val repository by lazy { HabitRepository(database.habitDao(), database.userDao(), preferences, syncManager) }
+    val repository by lazy { HabitRepository(database.habitDao(), database.todoDao(), database.userDao(), preferences, syncManager) }
 
     override fun onCreate() {
         super.onCreate()

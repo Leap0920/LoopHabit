@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.loophabit.data.Habit
 import com.example.loophabit.data.HabitRepository
+import com.example.loophabit.data.TodoItem
 import com.example.loophabit.data.User
 import com.example.loophabit.data.FocusState
 import com.example.loophabit.data.sync.SyncManager
@@ -23,6 +24,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
 
@@ -89,11 +93,13 @@ class HabitViewModel(
                 val habits = repository.getAllHabits(userId).first()
                 val completions = repository.getAllCompletionsForUser(userId).first()
                 val focusSessions = repository.getAllFocusSessions(userId).first()
+                val todos = repository.getTodosForUser(userId).first()
 
                 val backupMap = mapOf(
                     "habits" to habits,
                     "completions" to completions,
-                    "focusSessions" to focusSessions
+                    "focusSessions" to focusSessions,
+                    "todos" to todos
                 )
 
                 val jsonString = com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(backupMap)
@@ -161,19 +167,31 @@ class HabitViewModel(
                 // Restore database in repository
                 repository.clearUserData(userId)
 
+                val habitIdMap = mutableMapOf<Long, Long>()
+
                 // 1. Insert habits
                 backupData.habits.forEach { habit ->
-                    repository.insertHabitDirect(habit.copy(userId = userId))
+                    val newId = repository.insertHabitDirect(habit.copy(id = 0, userId = userId))
+                    habitIdMap[habit.id] = newId
                 }
 
                 // 2. Insert completions (reassign userId context via the habit's owner)
                 backupData.completions?.forEach { completion ->
-                    repository.insertCompletionDirect(completion)
+                    val remappedHabitId = habitIdMap[completion.habitId]
+                    if (remappedHabitId != null) {
+                        repository.insertCompletionDirect(completion.copy(id = 0, habitId = remappedHabitId))
+                    }
                 }
 
                 // 3. Insert focus sessions
                 backupData.focusSessions?.forEach { session ->
-                    repository.insertFocusSessionDirect(session.copy(userId = userId))
+                    val remappedHabitId = session.habitId?.let { habitIdMap[it] }
+                    repository.insertFocusSessionDirect(session.copy(id = 0, userId = userId, habitId = remappedHabitId))
+                }
+
+                // 4. Insert todos
+                backupData.todos?.forEach { todo ->
+                    repository.insertTodoDirect(todo.copy(id = 0, userId = userId))
                 }
 
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -220,6 +238,12 @@ class HabitViewModel(
     val allFocusSessions: StateFlow<List<com.example.loophabit.data.FocusSession>> = currentUserId
         .flatMapLatest { userId ->
             if (userId == 0L) flowOf(emptyList()) else repository.getAllFocusSessions(userId)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val todos: StateFlow<List<TodoItem>> = currentUserId
+        .flatMapLatest { userId ->
+            if (userId == 0L) flowOf(emptyList()) else repository.getTodosForUser(userId)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -333,6 +357,75 @@ class HabitViewModel(
                 triggerSync()
                 updateWidget()
             }
+        }
+    }
+
+    fun addTodo(title: String, notes: String?) {
+        viewModelScope.launch {
+            val userId = currentUserId.value
+            if (userId != 0L && title.isNotBlank()) {
+                repository.addTodo(userId, title, notes)
+                updateWidget()
+            }
+        }
+    }
+
+    fun manualFocusDetailsForDate(date: String = todayDate): String = "Manual time • $date"
+
+    fun manualFocusMinutesForHabit(habitId: Long, date: String = todayDate): Int {
+        val details = manualFocusDetailsForDate(date)
+        return allFocusSessions.value
+            .firstOrNull { it.habitId == habitId && it.details == details }
+            ?.durationSeconds
+            ?.let { it / 60 }
+            ?: 0
+    }
+
+    fun hasFocusTimeForHabitOnDate(habitId: Long, date: String = todayDate): Boolean {
+        val manualDetails = manualFocusDetailsForDate(date)
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        return allFocusSessions.value.any { session ->
+            session.habitId == habitId &&
+                (session.details == manualDetails || formatter.format(Date(session.timestamp)) == date)
+        }
+    }
+
+    fun setManualFocusMinutes(habitId: Long, minutes: Int) {
+        viewModelScope.launch {
+            val userId = currentUserId.value
+            if (userId != 0L && minutes >= 0) {
+                repository.setManualFocusMinutes(
+                    userId = userId,
+                    habitId = habitId,
+                    minutes = minutes,
+                    details = manualFocusDetailsForDate(),
+                    timestamp = manualFocusTimestamp(todayDate)
+                )
+                updateWidget()
+            }
+        }
+    }
+
+    fun updateTodo(todo: TodoItem, title: String, notes: String?) {
+        viewModelScope.launch {
+            if (title.isNotBlank()) {
+                repository.updateTodo(todo, title, notes)
+                updateWidget()
+            }
+        }
+    }
+
+    fun toggleTodo(todo: TodoItem) {
+        viewModelScope.launch {
+            repository.toggleTodo(todo)
+            updateWidget()
+        }
+    }
+
+    fun deleteTodo(todo: TodoItem) {
+        viewModelScope.launch {
+            repository.deleteTodo(todo)
+            updateWidget()
         }
     }
 
@@ -603,6 +696,18 @@ class HabitViewModel(
         } catch (e: Exception) {
             e.printStackTrace()
             Pair(0, 0)
+        }
+    }
+
+    private fun manualFocusTimestamp(date: String): Long {
+        return try {
+            LocalDate.parse(date)
+                .atTime(LocalTime.NOON)
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
+        } catch (e: Exception) {
+            System.currentTimeMillis()
         }
     }
 }

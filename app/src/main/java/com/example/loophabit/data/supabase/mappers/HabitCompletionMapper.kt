@@ -3,8 +3,6 @@ package com.example.loophabit.data.supabase.mappers
 import com.example.loophabit.data.HabitCompletion
 import com.example.loophabit.data.supabase.dto.HabitCompletionDto
 import java.time.Instant
-import java.time.LocalDate
-import java.util.UUID
 
 /**
  * Mapper for converting between HabitCompletion (Room) and HabitCompletionDto (Supabase).
@@ -34,10 +32,12 @@ object HabitCompletionMapper : EntityDtoMapper<HabitCompletion, HabitCompletionD
     }
 
     override fun toInsertDto(entity: HabitCompletion): HabitCompletionDto {
-        return HabitCompletionDto.create(
-            habitId = UUID.fromString(entity.habitId.toString()),
-            date = LocalDate.parse(entity.date),
+        return HabitCompletionDto(
+            id = entity.id.toString(),
+            habit_id = entity.habitId.toString(),
+            date = entity.date,
             notes = entity.notes,
+            created_at = Instant.now().toString(),
             value = entity.value
         )
     }

@@ -59,6 +59,15 @@ interface HabitDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFocusSession(session: FocusSession): Long
 
+    @Update
+    suspend fun updateFocusSession(session: FocusSession): Int
+
+    @Query("DELETE FROM focus_sessions WHERE id = :sessionId")
+    suspend fun deleteFocusSessionById(sessionId: Long): Int
+
+    @Query("SELECT * FROM focus_sessions WHERE userId = :userId AND habitId = :habitId AND details = :details LIMIT 1")
+    suspend fun getFocusSessionByDetails(userId: Long, habitId: Long, details: String): FocusSession?
+
     @Query("SELECT * FROM focus_sessions WHERE userId = :userId ORDER BY timestamp DESC")
     fun getAllFocusSessions(userId: Long): Flow<List<FocusSession>>
 

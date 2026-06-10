@@ -1,7 +1,10 @@
 package com.example.loophabit.ui
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -37,7 +41,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.loophabit.data.Habit
-import kotlinx.coroutines.delay
 import android.media.RingtoneManager
 import android.os.Vibrator
 import android.os.VibrationEffect
@@ -199,6 +202,26 @@ fun FocusScreen(viewModel: HabitViewModel) {
         }
     }
 
+    val glowTransition = rememberInfiniteTransition(label = "focusGlow")
+    val glowScale by glowTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = if (isRunning) 1.18f else 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "focusGlowScale"
+    )
+    val glowAlpha by glowTransition.animateFloat(
+        initialValue = if (isRunning) 0.22f else 0.12f,
+        targetValue = if (isRunning) 0.45f else 0.18f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "focusGlowAlpha"
+    )
+
     // Progress percentage
     val progress = if (focusMode == "TIMER") {
         if (initialDurationMinutes > 0) {
@@ -291,40 +314,65 @@ fun FocusScreen(viewModel: HabitViewModel) {
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(240.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f), CircleShape)
-                    .border(2.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), CircleShape)
-                    .clip(CircleShape)
-                    .clickable(enabled = !isServiceRunning && focusMode == "TIMER") {
-                        showCustomDurationDialog = true
-                    }
+                    .size(272.dp)
             ) {
-                // Progress indicator wrapping the circle
-                CircularProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.size(232.dp),
-                    strokeWidth = 10.dp,
-                    color = parsedColor,
-                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                Box(
+                    modifier = Modifier
+                        .size(248.dp)
+                        .graphicsLayer {
+                            scaleX = glowScale
+                            scaleY = glowScale
+                        }
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    parsedColor.copy(alpha = glowAlpha),
+                                    parsedColor.copy(alpha = glowAlpha * 0.35f),
+                                    Color.Transparent
+                                )
+                            ),
+                            CircleShape
+                        )
                 )
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(240.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f), CircleShape)
+                        .border(2.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), CircleShape)
+                        .clip(CircleShape)
+                        .clickable(enabled = !isServiceRunning && focusMode == "TIMER") {
+                            showCustomDurationDialog = true
+                        }
                 ) {
-                    Text(
-                        text = timeString,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 42.sp,
-                        color = MaterialTheme.colorScheme.onBackground
+                    // Progress indicator wrapping the circle
+                    CircularProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.size(232.dp),
+                        strokeWidth = 10.dp,
+                        color = parsedColor,
+                        trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (isRunning) "STAY FOCUSED" else "PAUSED",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        color = if (isRunning) parsedColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                        letterSpacing = 1.sp
-                    )
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = timeString,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 42.sp,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (isRunning) "STAY FOCUSED" else "PAUSED",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = if (isRunning) parsedColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                            letterSpacing = 1.sp
+                        )
+                    }
                 }
             }
 

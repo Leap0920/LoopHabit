@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -273,6 +274,9 @@ fun HabitCardContent(
 @Composable
 fun CompletedHabitRow(
     habit: Habit,
+    manualMinutes: Int,
+    showManualTimeAction: Boolean,
+    onEditManualTime: () -> Unit,
     onUncomplete: () -> Unit
 ) {
     val parsedColor = remember(habit.colorHex) {
@@ -308,13 +312,39 @@ fun CompletedHabitRow(
                         .clip(CircleShape)
                         .background(parsedColor)
                 )
-                Text(
-                    text = habit.title,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = habit.title,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (showManualTimeAction) {
+                        Text(
+                            text = if (manualMinutes > 0) "Manual focus: ${manualMinutes}m" else "Add focus time",
+                            fontSize = 12.sp,
+                            color = parsedColor.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+            if (showManualTimeAction) {
+                IconButton(
+                    onClick = onEditManualTime,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(parsedColor.copy(alpha = 0.1f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Timer,
+                        contentDescription = "Add manual focus time",
+                        tint = parsedColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
             IconButton(
                 onClick = onUncomplete,

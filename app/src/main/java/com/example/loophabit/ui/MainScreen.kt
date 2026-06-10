@@ -146,6 +146,8 @@ fun MainScreen(viewModel: HabitViewModel) {
     val incompleteHabits by viewModel.incompleteHabits.collectAsState()
     val completedHabits by viewModel.completedHabits.collectAsState()
     val allHabits by viewModel.allHabits.collectAsState()
+    val allFocusSessions by viewModel.allFocusSessions.collectAsState()
+    val todos by viewModel.todos.collectAsState()
     val loopIndex by viewModel.loopIndex.collectAsState()
     val currentHabit by viewModel.currentHabit.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
@@ -155,11 +157,12 @@ fun MainScreen(viewModel: HabitViewModel) {
     val darkModeEnabled by app.preferences.darkModeEnabledFlow.collectAsState(initial = false)
 
     val scrollState = rememberScrollState()
-    var activeTab by remember { mutableStateOf("TODAY") } // TODAY, INSIGHTS
+    var activeTab by remember { mutableStateOf("TODAY") }
     var showAddDialog by remember { mutableStateOf(false) }
     var showManageDialog by remember { mutableStateOf(false) }
     var selectedHabitForDetails by remember { mutableStateOf<Habit?>(null) }
     var showNumericalLogDialogForHabit by remember { mutableStateOf<Habit?>(null) }
+    var manualTimeHabit by remember { mutableStateOf<Habit?>(null) }
 
     val context = LocalContext.current
     val importLauncher = rememberLauncherForActivityResult(
@@ -244,6 +247,12 @@ fun MainScreen(viewModel: HabitViewModel) {
                         label = { Text("Focus", fontWeight = FontWeight.Bold) }
                     )
                     NavigationBarItem(
+                        selected = activeTab == "TODO",
+                        onClick = { activeTab = "TODO" },
+                        icon = { Icon(Icons.Outlined.CheckCircle, contentDescription = "Todo") },
+                        label = { Text("Todo", fontWeight = FontWeight.Bold) }
+                    )
+                    NavigationBarItem(
                         selected = activeTab == "INSIGHTS",
                         onClick = { activeTab = "INSIGHTS" },
                         icon = { Icon(Icons.Outlined.DateRange, contentDescription = "Insights") },
@@ -279,7 +288,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                 AnimatedContent(
                     targetState = activeTab,
                     transitionSpec = {
-                        val order = listOf("TODAY", "FOCUS", "INSIGHTS")
+                        val order = listOf("TODAY", "FOCUS", "TODO", "INSIGHTS")
                         val fromIndex = order.indexOf(initialState)
                         val toIndex = order.indexOf(targetState)
                         if (toIndex > fromIndex) {
@@ -493,8 +502,12 @@ fun MainScreen(viewModel: HabitViewModel) {
                                             .animateContentSize()
                                     ) {
                                         completedHabits.forEach { habit ->
+                                            val hasFocusTime = viewModel.hasFocusTimeForHabitOnDate(habit.id)
                                             CompletedHabitRow(
                                                 habit = habit,
+                                                manualMinutes = viewModel.manualFocusMinutesForHabit(habit.id),
+                                                showManualTimeAction = !hasFocusTime,
+                                                onEditManualTime = { manualTimeHabit = habit },
                                                 onUncomplete = { viewModel.uncompleteHabit(habit.id) }
                                             )
                                         }
@@ -508,6 +521,15 @@ fun MainScreen(viewModel: HabitViewModel) {
                         }
                         "FOCUS" -> {
                             FocusScreen(viewModel = viewModel)
+                        }
+                        "TODO" -> {
+                            TodoScreen(
+                                todos = todos,
+                                onAddTodo = { title, notes -> viewModel.addTodo(title, notes) },
+                                onUpdateTodo = { todo, title, notes -> viewModel.updateTodo(todo, title, notes) },
+                                onToggleTodo = { todo -> viewModel.toggleTodo(todo) },
+                                onDeleteTodo = { todo -> viewModel.deleteTodo(todo) }
+                            )
                         }
                         "INSIGHTS" -> {
                             InsightsDashboard(
@@ -569,6 +591,22 @@ fun MainScreen(viewModel: HabitViewModel) {
         )
     }
 
+    val habitForManualTime = manualTimeHabit
+    if (habitForManualTime != null) {
+        val existingMinutes = remember(habitForManualTime.id, allFocusSessions) {
+            viewModel.manualFocusMinutesForHabit(habitForManualTime.id)
+        }
+        ManualTimeDialog(
+            habit = habitForManualTime,
+            initialMinutes = existingMinutes,
+            onDismiss = { manualTimeHabit = null },
+            onSave = { minutes ->
+                viewModel.setManualFocusMinutes(habitForManualTime.id, minutes)
+                manualTimeHabit = null
+            }
+        )
+    }
+
 
 
     val focusHabitId by viewModel.focusHabitId.collectAsState()
@@ -627,6 +665,112 @@ fun MainScreen(viewModel: HabitViewModel) {
         )
     }
     }
+}
+
+@Composable
+fun ManualTimeDialog(
+    habit: Habit,
+    initialMinutes: Int,
+    onDismiss: () -> Unit,
+    onSave: (Int) -> Unit
+) {
+    var hoursText by remember(initialMinutes) {
+        val hours = initialMinutes / 60
+        mutableStateOf(if (hours > 0) hours.toString() else "")
+    }
+    var minutesText by remember(initialMinutes) {
+        val minutes = initialMinutes % 60
+        mutableStateOf(if (minutes > 0) minutes.toString() else "")
+    }
+    var isError by remember { mutableStateOf(false) }
+
+    fun totalMinutesOrNull(): Int? {
+        val hours = hoursText.toIntOrNull() ?: 0
+        val minutes = minutesText.toIntOrNull() ?: 0
+        if (hours !in 0..24 || minutes !in 0..59) return null
+        val total = (hours * 60) + minutes
+        return if (total in 0..1440) total else null
+    }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Manual Focus Time",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = habit.title,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = hoursText,
+                        onValueChange = { input ->
+                            if (input.all { it.isDigit() } && input.length <= 2) {
+                                hoursText = input
+                                isError = totalMinutesOrNull() == null
+                            }
+                        },
+                        label = { Text("Hours") },
+                        placeholder = { Text("0") },
+                        isError = isError,
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.OutlinedTextField(
+                        value = minutesText,
+                        onValueChange = { input ->
+                            if (input.all { it.isDigit() } && input.length <= 2) {
+                                minutesText = input
+                                isError = totalMinutesOrNull() == null
+                            }
+                        },
+                        label = { Text("Minutes") },
+                        placeholder = { Text("0") },
+                        isError = isError,
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Text(
+                    text = "Saved as a focus session for today. Use 0h 0m to delete the manual entry.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.Button(
+                onClick = {
+                    val totalMinutes = totalMinutesOrNull()
+                    if (totalMinutes != null) {
+                        onSave(totalMinutes)
+                    } else {
+                        isError = true
+                    }
+                },
+                enabled = !isError
+            ) {
+                Text("Save", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
