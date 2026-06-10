@@ -1,6 +1,8 @@
 package com.example.loophabit
 
 import android.app.Application
+import android.util.Log
+import androidx.work.Configuration
 import com.example.loophabit.data.AppDatabase
 import com.example.loophabit.data.HabitRepository
 import com.example.loophabit.data.LoopPreferences
@@ -13,7 +15,7 @@ import com.example.loophabit.data.sync.SyncScheduler
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
-class LoopHabitApp : Application() {
+class LoopHabitApp : Application(), Configuration.Provider {
 
     val database by lazy { AppDatabase.getDatabase(this) }
     val preferences by lazy { LoopPreferences(this) }
@@ -35,6 +37,11 @@ class LoopHabitApp : Application() {
     }
 
     val repository by lazy { HabitRepository(database.habitDao(), database.todoDao(), database.userDao(), preferences, syncManager) }
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setMinimumLoggingLevel(Log.INFO)
+            .build()
 
     override fun onCreate() {
         super.onCreate()

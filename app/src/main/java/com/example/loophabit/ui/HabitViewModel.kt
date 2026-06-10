@@ -154,12 +154,19 @@ class HabitViewModel(
                     return@launch
                 }
 
-                val gson = com.google.gson.Gson()
-                val backupData = gson.fromJson(jsonText, com.example.loophabit.data.sync.BackupData::class.java)
-
-                if (backupData.habits == null) {
+                val gson = com.google.gson.GsonBuilder().setLenient().create()
+                val backupData = try {
+                    gson.fromJson(jsonText, com.example.loophabit.data.sync.BackupData::class.java)
+                } catch (e: com.google.gson.JsonSyntaxException) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        onError("Invalid backup file format")
+                        onError("Invalid backup file: ${e.message ?: "Malformed JSON"}")
+                    }
+                    return@launch
+                }
+
+                if (backupData == null || backupData.habits == null) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onError("Invalid backup file format: missing habits data")
                     }
                     return@launch
                 }
@@ -171,27 +178,43 @@ class HabitViewModel(
 
                 // 1. Insert habits
                 backupData.habits.forEach { habit ->
-                    val newId = repository.insertHabitDirect(habit.copy(id = 0, userId = userId))
-                    habitIdMap[habit.id] = newId
+                    try {
+                        val newId = repository.insertHabitDirect(habit.copy(id = 0, userId = userId))
+                        habitIdMap[habit.id] = newId
+                    } catch (e: Exception) {
+                        // Skip individual habit if it fails (e.g., corrupt data)
+                    }
                 }
 
                 // 2. Insert completions (reassign userId context via the habit's owner)
                 backupData.completions?.forEach { completion ->
-                    val remappedHabitId = habitIdMap[completion.habitId]
-                    if (remappedHabitId != null) {
-                        repository.insertCompletionDirect(completion.copy(id = 0, habitId = remappedHabitId))
+                    try {
+                        val remappedHabitId = habitIdMap[completion.habitId]
+                        if (remappedHabitId != null) {
+                            repository.insertCompletionDirect(completion.copy(id = 0, habitId = remappedHabitId))
+                        }
+                    } catch (e: Exception) {
+                        // Skip individual completion if it fails
                     }
                 }
 
                 // 3. Insert focus sessions
                 backupData.focusSessions?.forEach { session ->
-                    val remappedHabitId = session.habitId?.let { habitIdMap[it] }
-                    repository.insertFocusSessionDirect(session.copy(id = 0, userId = userId, habitId = remappedHabitId))
+                    try {
+                        val remappedHabitId = session.habitId?.let { habitIdMap[it] }
+                        repository.insertFocusSessionDirect(session.copy(id = 0, userId = userId, habitId = remappedHabitId))
+                    } catch (e: Exception) {
+                        // Skip individual session if it fails
+                    }
                 }
 
                 // 4. Insert todos
                 backupData.todos?.forEach { todo ->
-                    repository.insertTodoDirect(todo.copy(id = 0, userId = userId))
+                    try {
+                        repository.insertTodoDirect(todo.copy(id = 0, userId = userId))
+                    } catch (e: Exception) {
+                        // Skip individual todo if it fails
+                    }
                 }
 
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
