@@ -14,6 +14,7 @@ import com.example.loophabit.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -157,6 +158,7 @@ fun MainScreen(viewModel: HabitViewModel) {
     val darkModeEnabled by app.preferences.darkModeEnabledFlow.collectAsState(initial = false)
 
     val scrollState = rememberScrollState()
+    val todayListState = rememberLazyListState()
     var activeTab by remember { mutableStateOf("TODAY") }
     var showAddDialog by remember { mutableStateOf(false) }
     var showManageDialog by remember { mutableStateOf(false) }
@@ -287,7 +289,7 @@ fun MainScreen(viewModel: HabitViewModel) {
             floatingActionButton = {
                 if (activeTab == "TODAY") {
                     AnimatedVisibility(
-                        visible = scrollState.value == 0,
+                        visible = todayListState.firstVisibleItemIndex == 0 && todayListState.firstVisibleItemScrollOffset == 0,
                         enter = fadeIn() + scaleIn(),
                         exit = fadeOut() + scaleOut()
                     ) {
@@ -330,16 +332,17 @@ fun MainScreen(viewModel: HabitViewModel) {
                 ) { targetTab ->
                     when (targetTab) {
                         "TODAY" -> {
-                            Column(
+                            LazyColumn(
+                                state = todayListState,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .verticalScroll(scrollState)
                                     .padding(horizontal = 20.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Spacer(modifier = Modifier.height(10.dp))
+                                item { Spacer(modifier = Modifier.height(10.dp)) }
 
                                 // Progress Section
+                                item {
                                 Card(
                                     shape = RoundedCornerShape(24.dp),
                                     colors = CardDefaults.cardColors(
@@ -385,10 +388,12 @@ fun MainScreen(viewModel: HabitViewModel) {
                                         }
                                     }
                                 }
+                                }
 
-                                Spacer(modifier = Modifier.height(30.dp))
+                                item { Spacer(modifier = Modifier.height(30.dp)) }
 
                                 // The Stack
+                                item {
                                 if (incompleteHabits.isNotEmpty()) {
                                     val size = incompleteHabits.size
                                     Box(
@@ -506,41 +511,37 @@ fun MainScreen(viewModel: HabitViewModel) {
                                         }
                                     }
                                 }
+                                }
 
-                                Spacer(modifier = Modifier.height(20.dp))
+                                item { Spacer(modifier = Modifier.height(20.dp)) }
 
                                 // Completed List Section
                                 if (completedHabits.isNotEmpty()) {
-                                    Text(
-                                        text = "Completed Today",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        textAlign = TextAlign.Start
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Column(
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .animateContentSize()
-                                    ) {
-                                        completedHabits.forEach { habit ->
-                                            val hasFocusTime = viewModel.hasFocusTimeForHabitOnDate(habit.id)
-                                            CompletedHabitRow(
-                                                habit = habit,
-                                                manualMinutes = viewModel.manualFocusMinutesForHabit(habit.id),
-                                                showManualTimeAction = !hasFocusTime,
-                                                onEditManualTime = { manualTimeHabit = habit },
-                                                onUncomplete = { viewModel.uncompleteHabit(habit.id) }
-                                            )
-                                        }
+                                    item {
+                                        Text(
+                                            text = "Completed Today",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlign = TextAlign.Start
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
                                     }
-                                    Spacer(modifier = Modifier.height(20.dp))
+                                    items(completedHabits, key = { it.id }) { habit ->
+                                        val hasFocusTime = viewModel.hasFocusTimeForHabitOnDate(habit.id)
+                                        CompletedHabitRow(
+                                            habit = habit,
+                                            manualMinutes = viewModel.manualFocusMinutesForHabit(habit.id),
+                                            showManualTimeAction = !hasFocusTime,
+                                            onEditManualTime = { manualTimeHabit = habit },
+                                            onUncomplete = { viewModel.uncompleteHabit(habit.id) }
+                                        )
+                                    }
+                                    item { Spacer(modifier = Modifier.height(20.dp)) }
                                 }
 
                                 // Bottom Spacer to prevent overlap with FAB
-                                Spacer(modifier = Modifier.height(80.dp))
+                                item { Spacer(modifier = Modifier.height(80.dp)) }
                             }
                         }
                         "FOCUS" -> {

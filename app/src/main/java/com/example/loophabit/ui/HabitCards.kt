@@ -32,8 +32,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,17 +63,19 @@ fun SwipeableCard(
     modifier: Modifier = Modifier,
     content: @Composable (Float) -> Unit
 ) {
-    val swipeOffset = remember(habit.id) { Animatable(0f) }
+    // Use plain float state for drag tracking (synchronous, no coroutine overhead)
+    var dragOffset by remember(habit.id) { mutableFloatStateOf(0f) }
+    val animatable = remember(habit.id) { Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val swipeThreshold = with(density) { 120.dp.toPx() }
 
     Box(
         modifier = modifier
-            .offset { IntOffset(swipeOffset.value.roundToInt(), 0) }
+            .offset { IntOffset(dragOffset.roundToInt(), 0) }
             .graphicsLayer {
-                val rotation = (swipeOffset.value / 40f)
-                val alpha = 1f - (abs(swipeOffset.value) / 1200f).coerceIn(0f, 0.8f)
+                val rotation = (dragOffset / 40f)
+                val alpha = 1f - (abs(dragOffset) / 1200f).coerceIn(0f, 0.8f)
                 this.rotationZ = rotation
                 this.alpha = alpha
             }
@@ -78,49 +83,51 @@ fun SwipeableCard(
                 detectDragGestures(
                     onDragEnd = {
                         coroutineScope.launch {
-                            val targetOffset = swipeOffset.value
-                            if (targetOffset > swipeThreshold) {
-                                // Complete (Swipe Right)
-                                swipeOffset.animateTo(
+                            if (dragOffset > swipeThreshold) {
+                                animatable.snapTo(dragOffset)
+                                animatable.animateTo(
                                     targetValue = 1000f,
                                     animationSpec = tween(durationMillis = 200)
                                 )
+                                dragOffset = 0f
                                 onSwipeRight()
-                            } else if (targetOffset < -swipeThreshold) {
-                                // Skip/Cycle (Swipe Left)
-                                swipeOffset.animateTo(
+                            } else if (dragOffset < -swipeThreshold) {
+                                animatable.snapTo(dragOffset)
+                                animatable.animateTo(
                                     targetValue = -1000f,
                                     animationSpec = tween(durationMillis = 200)
                                 )
+                                dragOffset = 0f
                                 onSwipeLeft()
                             } else {
-                                // Return
-                                swipeOffset.animateTo(
+                                animatable.snapTo(dragOffset)
+                                animatable.animateTo(
                                     0f,
                                     spring(dampingRatio = Spring.DampingRatioMediumBouncy)
                                 )
+                                dragOffset = 0f
                             }
                         }
                     },
                     onDragCancel = {
                         coroutineScope.launch {
-                            swipeOffset.animateTo(
+                            animatable.snapTo(dragOffset)
+                            animatable.animateTo(
                                 0f,
                                 spring(dampingRatio = Spring.DampingRatioMediumBouncy)
                             )
+                            dragOffset = 0f
                         }
                     },
                     onDrag = { change, dragAmount ->
                         change.consume()
-                        // Use the pointerInput coroutine context directly - no need to launch
-                        coroutineScope.launch {
-                            swipeOffset.snapTo(swipeOffset.value + dragAmount.x)
-                        }
+                        // Direct state mutation — no coroutine launch per pixel
+                        dragOffset += dragAmount.x
                     }
                 )
             }
     ) {
-        content(swipeOffset.value)
+        content(dragOffset)
     }
 }
 
