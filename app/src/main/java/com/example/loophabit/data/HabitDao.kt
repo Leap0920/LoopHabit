@@ -56,6 +56,9 @@ interface HabitDao {
     @Query("SELECT hc.* FROM habit_completions hc INNER JOIN habits h ON hc.habitId = h.id WHERE h.userId = :userId")
     fun getAllCompletionsForUser(userId: Long): Flow<List<HabitCompletion>>
 
+    @Query("SELECT DISTINCT date FROM habit_completions hc INNER JOIN habits h ON hc.habitId = h.id WHERE h.userId = :userId")
+    fun getAllCompletionDatesForUser(userId: Long): Flow<List<String>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFocusSession(session: FocusSession): Long
 

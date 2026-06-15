@@ -69,6 +69,17 @@ import com.example.loophabit.data.Habit
 import com.example.loophabit.data.sync.SyncState
 import com.example.loophabit.ui.theme.LoopHabitTheme
 import kotlin.math.roundToInt
+import java.text.SimpleDateFormat
+import java.util.*
+
+private fun formatSelectedDate(dateStr: String): String {
+    return try {
+        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateStr)
+        SimpleDateFormat("MMMM d", Locale.getDefault()).format(date!!)
+    } catch (e: Exception) {
+        dateStr
+    }
+}
 
 @Composable
 fun GradientButton(
@@ -152,6 +163,11 @@ fun MainScreen(viewModel: HabitViewModel) {
     val loopIndex by viewModel.loopIndex.collectAsState()
     val currentHabit by viewModel.currentHabit.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
+    val selectedDate by viewModel.selectedDate.collectAsState()
+    val incompleteHabitsForSelected by viewModel.incompleteHabitsForSelected.collectAsState()
+    val completedHabitsForSelected by viewModel.completedHabitsForSelected.collectAsState()
+    val allCompletionDates by viewModel.allCompletionDates.collectAsState()
+    val todayDate = viewModel.todayDate
 
     // Get dark mode preference
     val app = (LocalContext.current.applicationContext as com.example.loophabit.LoopHabitApp)
@@ -341,6 +357,15 @@ fun MainScreen(viewModel: HabitViewModel) {
                             ) {
                                 item { Spacer(modifier = Modifier.height(10.dp)) }
 
+                                // Date Picker Row (under header, before progress)
+                                item {
+                                    DatePickerRow(
+                                        selectedDate = selectedDate,
+                                        onDateSelected = { viewModel.setSelectedDate(it) },
+                                        completionDates = allCompletionDates
+                                    )
+                                }
+
                                 // Progress Section
                                 item {
                                 Card(
@@ -358,13 +383,13 @@ fun MainScreen(viewModel: HabitViewModel) {
                                     ) {
                                         Column(modifier = Modifier.weight(1.5f)) {
                                             Text(
-                                                text = "Today's Loop",
+                                                text = if (selectedDate == todayDate) "Today's Loop" else "${formatSelectedDate(selectedDate)}'s Loop",
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 18.sp
                                             )
                                             Text(
-                                                text = if (totalHabitsCount == 0) "No habits added yet"
-                                                else "${completedHabits.size} of $totalHabitsCount completed",
+                                                text = if (incompleteHabitsForSelected.size + completedHabitsForSelected.size == 0) "No habits added yet"
+                                                else "${completedHabitsForSelected.size} of ${incompleteHabitsForSelected.size + completedHabitsForSelected.size} completed",
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 fontSize = 14.sp
                                             )
@@ -374,14 +399,14 @@ fun MainScreen(viewModel: HabitViewModel) {
                                             modifier = Modifier.weight(1f)
                                         ) {
                                             CircularProgressIndicator(
-                                                progress = { completionProgress },
+                                                progress = { if (incompleteHabitsForSelected.size + completedHabitsForSelected.size > 0) completedHabitsForSelected.size.toFloat() / (incompleteHabitsForSelected.size + completedHabitsForSelected.size).toFloat() else 0f },
                                                 modifier = Modifier.size(64.dp),
                                                 strokeWidth = 6.dp,
                                                 color = MaterialTheme.colorScheme.primary,
                                                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
                                             )
                                             Text(
-                                                text = "${(completionProgress * 100).roundToInt()}%",
+                                                text = "${if (incompleteHabitsForSelected.size + completedHabitsForSelected.size > 0) (completedHabitsForSelected.size.toFloat() / (incompleteHabitsForSelected.size + completedHabitsForSelected.size).toFloat() * 100).roundToInt() else 0}%",
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 14.sp
                                             )
@@ -394,8 +419,8 @@ fun MainScreen(viewModel: HabitViewModel) {
 
                                 // The Stack
                                 item {
-                                if (incompleteHabits.isNotEmpty()) {
-                                    val size = incompleteHabits.size
+                                if (incompleteHabitsForSelected.isNotEmpty()) {
+                                    val size = incompleteHabitsForSelected.size
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -406,7 +431,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                                         for (i in 2 downTo 0) {
                                             if (i >= size) continue
                                             val cardIndex = (loopIndex + i) % size
-                                            val habit = incompleteHabits[cardIndex]
+                                            val habit = incompleteHabitsForSelected[cardIndex]
                                             val scale = 1f - (i * 0.05f)
                                             val yOffset = (i * 16).dp
 
@@ -516,10 +541,10 @@ fun MainScreen(viewModel: HabitViewModel) {
                                 item { Spacer(modifier = Modifier.height(20.dp)) }
 
                                 // Completed List Section
-                                if (completedHabits.isNotEmpty()) {
+                                if (completedHabitsForSelected.isNotEmpty()) {
                                     item {
                                         Text(
-                                            text = "Completed Today",
+                                            text = if (selectedDate == todayDate) "Completed Today" else "Completed on ${formatSelectedDate(selectedDate)}",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 16.sp,
                                             modifier = Modifier.fillMaxWidth(),
@@ -527,7 +552,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                                         )
                                         Spacer(modifier = Modifier.height(10.dp))
                                     }
-                                    items(completedHabits, key = { it.id }) { habit ->
+                                    items(completedHabitsForSelected, key = { it.id }) { habit ->
                                         val hasFocusTime = viewModel.hasFocusTimeForHabitOnDate(habit.id)
                                         CompletedHabitRow(
                                             habit = habit,

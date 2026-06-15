@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -40,6 +41,13 @@ class HabitViewModel(
 
     val todayDate: String
         get() = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+    private val _selectedDate = MutableStateFlow(todayDate)
+    val selectedDate: StateFlow<String> = _selectedDate.asStateFlow()
+
+    fun setSelectedDate(date: String) {
+        _selectedDate.value = date
+    }
 
     val currentUserId: StateFlow<Long> = repository.currentUserIdFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
@@ -284,6 +292,27 @@ class HabitViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val incompleteHabitsForSelected: StateFlow<List<Habit>> = currentUserId
+        .combine(_selectedDate) { userId, date -> Pair(userId, date) }
+        .flatMapLatest { (userId, date) ->
+            if (userId == 0L) flowOf(emptyList()) else repository.getIncompleteHabitsOfToday(userId, date)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val completedHabitsForSelected: StateFlow<List<Habit>> = currentUserId
+        .combine(_selectedDate) { userId, date -> Pair(userId, date) }
+        .flatMapLatest { (userId, date) ->
+            if (userId == 0L) flowOf(emptyList()) else repository.getCompletedHabitsOfToday(userId, date)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allCompletionDates: StateFlow<Set<String>> = currentUserId
+        .flatMapLatest { userId ->
+            if (userId == 0L) flowOf(emptySet()) else repository.getAllCompletionDatesForUser(userId)
+        }
+        .map { it.toSet() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
     val loopIndex: StateFlow<Int> = repository.loopIndexFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
@@ -367,7 +396,7 @@ class HabitViewModel(
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
-                repository.completeHabit(userId, habitId, todayDate)
+                repository.completeHabit(userId, habitId, _selectedDate.value)
                 triggerSync()
                 updateWidget()
             }
@@ -458,7 +487,7 @@ class HabitViewModel(
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
-                repository.uncompleteHabit(userId, habitId, todayDate)
+                repository.uncompleteHabit(userId, habitId, _selectedDate.value)
                 triggerSync()
                 updateWidget()
             }

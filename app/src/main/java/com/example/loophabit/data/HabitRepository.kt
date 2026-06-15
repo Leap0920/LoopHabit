@@ -39,6 +39,9 @@ class HabitRepository(
     fun getCompletedHabitsOfToday(userId: Long, date: String): Flow<List<Habit>> =
         habitDao.getCompletedHabits(userId, date)
 
+    fun getAllCompletionDatesForUser(userId: Long): Flow<List<String>> =
+        habitDao.getAllCompletionDatesForUser(userId)
+
     suspend fun addHabit(
         userId: Long,
         title: String,
