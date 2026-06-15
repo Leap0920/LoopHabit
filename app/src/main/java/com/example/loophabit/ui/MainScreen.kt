@@ -825,7 +825,7 @@ fun MainScreen(viewModel: HabitViewModel) {
     if (showDownloadProgress) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = {},
-            properties = androidx.compose.material3.AlertDialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+            properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
         ) {
             androidx.compose.material3.Card(
                 shape = RoundedCornerShape(20.dp),
