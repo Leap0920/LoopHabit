@@ -444,16 +444,17 @@ class HabitViewModel(
         }
     }
 
-    fun setManualFocusMinutes(habitId: Long, minutes: Int) {
+    fun setManualFocusMinutes(habitId: Long, minutes: Int, startHour: Int = java.time.LocalTime.now().hour, startMinute: Int = java.time.LocalTime.now().minute) {
         viewModelScope.launch {
             val userId = currentUserId.value
+            val date = _selectedDate.value
             if (userId != 0L && minutes >= 0) {
                 repository.setManualFocusMinutes(
                     userId = userId,
                     habitId = habitId,
                     minutes = minutes,
-                    details = manualFocusDetailsForDate(),
-                    timestamp = manualFocusTimestamp(todayDate)
+                    details = manualFocusDetailsForDate(date),
+                    timestamp = manualFocusTimestamp(date, startHour, startMinute)
                 )
                 updateWidget()
             }
@@ -753,10 +754,10 @@ class HabitViewModel(
         }
     }
 
-    private fun manualFocusTimestamp(date: String): Long {
+    private fun manualFocusTimestamp(date: String, hour: Int = java.time.LocalTime.now().hour, minute: Int = java.time.LocalTime.now().minute): Long {
         return try {
             LocalDate.parse(date)
-                .atTime(LocalTime.NOON)
+                .atTime(java.time.LocalTime.of(hour, minute))
                 .atZone(ZoneId.systemDefault())
                 .toInstant()
                 .toEpochMilli()

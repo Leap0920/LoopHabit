@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Toast
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -51,13 +52,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -650,8 +654,8 @@ fun MainScreen(viewModel: HabitViewModel) {
             habit = habitForManualTime,
             initialMinutes = existingMinutes,
             onDismiss = { manualTimeHabit = null },
-            onSave = { minutes ->
-                viewModel.setManualFocusMinutes(habitForManualTime.id, minutes)
+            onSave = { minutes, startHour, startMinute ->
+                viewModel.setManualFocusMinutes(habitForManualTime.id, minutes, startHour, startMinute)
                 manualTimeHabit = null
             }
         )
@@ -718,11 +722,204 @@ fun MainScreen(viewModel: HabitViewModel) {
 }
 
 @Composable
+fun WheelTimePicker(
+    initialHour: Int,
+    initialMinute: Int,
+    onTimeSelected: (hour24: Int, minute: Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isPm = initialHour >= 12
+    val initialHour12 = when {
+        initialHour == 0 -> 12
+        initialHour > 12 -> initialHour - 12
+        else -> initialHour
+    }
+
+    var selectedHour12 by remember { mutableIntStateOf(initialHour12) }
+    var selectedMinute by remember { mutableIntStateOf(initialMinute / 5 * 5) }
+    var selectedAmPm by remember { mutableStateOf(if (isPm) "PM" else "AM") }
+
+    val hours = (1..12).toList()
+    val minutes = (0..55 step 5).toList()
+    val amPm = listOf("AM", "PM")
+
+    val ITEM_HEIGHT = 48.dp
+    val VISIBLE_ITEMS = 5
+
+    @Composable
+    fun <T> WheelColumn(
+        items: List<T>,
+        selectedItem: T,
+        label: (T) -> String,
+        onSelectionChange: (T) -> Unit
+    ) {
+        val initialIdx = items.indexOf(selectedItem).coerceAtLeast(0)
+        val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIdx)
+
+        // Detect the centered item based on scroll position
+        val density = LocalDensity.current
+        val itemHeightPx = with(density) { ITEM_HEIGHT.toPx() }
+        val halfVisible = VISIBLE_ITEMS / 2
+
+        LaunchedEffect(listState.isScrollInProgress) {
+            if (!listState.isScrollInProgress) {
+                val layoutInfo = listState.layoutInfo
+                val center = (layoutInfo.viewportEndOffset + layoutInfo.viewportStartOffset) / 2
+                val closest = layoutInfo.visibleItemsInfo.minByOrNull { 
+                    val itemCenter = it.offset + it.size / 2
+                    kotlin.math.abs(itemCenter - center)
+                }
+                if (closest != null && items[closest.index] != selectedItem) {
+                    onSelectionChange(items[closest.index])
+                }
+            }
+        }
+
+        Box(
+            modifier = modifier
+                .width(64.dp)
+                .height(ITEM_HEIGHT * VISIBLE_ITEMS)
+        ) {
+            // Selection highlight
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(ITEM_HEIGHT)
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                        RoundedCornerShape(10.dp)
+                    )
+            )
+
+            // Fade gradient overlays
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(ITEM_HEIGHT * 2)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.surface,
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(ITEM_HEIGHT * 2)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.surface
+                            )
+                        )
+                    )
+            )
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = ITEM_HEIGHT * 2),
+            ) {
+                items(items.size) { index ->
+                    val isSelected = items[index] == selectedItem
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(ITEM_HEIGHT),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label(items[index]),
+                            fontSize = if (isSelected) 20.sp else 16.sp,
+                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            WheelColumn(
+                items = hours,
+                selectedItem = selectedHour12,
+                label = { "$it" },
+                onSelectionChange = {
+                    selectedHour12 = it
+                    val hour24 = when {
+                        selectedAmPm == "AM" && it == 12 -> 0
+                        selectedAmPm == "PM" && it != 12 -> it + 12
+                        else -> it
+                    }
+                    onTimeSelected(hour24, selectedMinute)
+                }
+            )
+
+            Text(
+                text = ":",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = (ITEM_HEIGHT * 2))
+            )
+
+            WheelColumn(
+                items = minutes,
+                selectedItem = selectedMinute,
+                label = { String.format("%02d", it) },
+                onSelectionChange = {
+                    selectedMinute = it
+                    val hour24 = when {
+                        selectedAmPm == "AM" && selectedHour12 == 12 -> 0
+                        selectedAmPm == "PM" && selectedHour12 != 12 -> selectedHour12 + 12
+                        else -> selectedHour12
+                    }
+                    onTimeSelected(hour24, it)
+                }
+            )
+
+            WheelColumn(
+                items = amPm,
+                selectedItem = selectedAmPm,
+                label = { it },
+                onSelectionChange = {
+                    selectedAmPm = it
+                    val hour24 = when {
+                        it == "AM" && selectedHour12 == 12 -> 0
+                        it == "PM" && selectedHour12 != 12 -> selectedHour12 + 12
+                        else -> selectedHour12
+                    }
+                    onTimeSelected(hour24, selectedMinute)
+                }
+            )
+        }
+    }
+}
+
+@Composable
 fun ManualTimeDialog(
     habit: Habit,
     initialMinutes: Int,
     onDismiss: () -> Unit,
-    onSave: (Int) -> Unit
+    onSave: (Int, Int, Int) -> Unit
 ) {
     var hoursText by remember(initialMinutes) {
         val hours = initialMinutes / 60
@@ -733,6 +930,10 @@ fun ManualTimeDialog(
         mutableStateOf(if (minutes > 0) minutes.toString() else "")
     }
     var isError by remember { mutableStateOf(false) }
+
+    val now = java.time.LocalTime.now()
+    var selectedStartHour by remember { mutableIntStateOf(now.hour) }
+    var selectedStartMinute by remember { mutableIntStateOf(now.minute / 5 * 5) }
 
     fun totalMinutesOrNull(): Int? {
         val hours = hoursText.toIntOrNull() ?: 0
@@ -756,6 +957,13 @@ fun ManualTimeDialog(
                     text = habit.title,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.SemiBold
+                )
+
+                Text(
+                    text = "Duration",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     androidx.compose.material3.OutlinedTextField(
@@ -793,9 +1001,38 @@ fun ManualTimeDialog(
                         modifier = Modifier.weight(1f)
                     )
                 }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Text(
-                    text = "Saved as a focus session for today. Use 0h 0m to delete the manual entry.",
-                    fontSize = 12.sp,
+                    text = "Start Time",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    WheelTimePicker(
+                        initialHour = selectedStartHour,
+                        initialMinute = selectedStartMinute,
+                        onTimeSelected = { h, m ->
+                            selectedStartHour = h
+                            selectedStartMinute = m
+                        }
+                    )
+                }
+
+                Text(
+                    text = "When did you start? This shows on the Productive Focus Hours chart.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text(
+                    text = "Use 0h 0m to delete the manual entry.",
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -805,7 +1042,7 @@ fun ManualTimeDialog(
                 onClick = {
                     val totalMinutes = totalMinutesOrNull()
                     if (totalMinutes != null) {
-                        onSave(totalMinutes)
+                        onSave(totalMinutes, selectedStartHour, selectedStartMinute)
                     } else {
                         isError = true
                     }
