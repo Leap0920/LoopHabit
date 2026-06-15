@@ -54,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -75,6 +76,9 @@ import com.example.loophabit.ui.theme.LoopHabitTheme
 import kotlin.math.roundToInt
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private fun formatSelectedDate(dateStr: String): String {
     return try {
@@ -186,7 +190,32 @@ fun MainScreen(viewModel: HabitViewModel) {
     var showNumericalLogDialogForHabit by remember { mutableStateOf<Habit?>(null) }
     var manualTimeHabit by remember { mutableStateOf<Habit?>(null) }
 
+    // Auto-update state
+    var showAutoUpdateDialog by remember { mutableStateOf(false) }
+    var latestUpdateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var showDownloadProgress by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0f) }
+
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    // Auto-check for updates on app launch
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            try {
+                val updateInfo = UpdateManager.checkForUpdates()
+                if (updateInfo != null) {
+                    val currentVer = UpdateManager.getCurrentVersionName(context)
+                    if (UpdateManager.isNewerVersion(currentVer, updateInfo.versionName)) {
+                        latestUpdateInfo = updateInfo
+                        showAutoUpdateDialog = true
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -717,6 +746,114 @@ fun MainScreen(viewModel: HabitViewModel) {
                 }
             }
         )
+    }
+
+    // Auto-update dialog (shown on app launch if update available)
+    if (showAutoUpdateDialog && latestUpdateInfo != null) {
+        val update = latestUpdateInfo!!
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showAutoUpdateDialog = false },
+            title = {
+                Text(
+                    text = "New Update Available!",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Version: ${update.versionName}",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    if (update.releaseNotes.isNotBlank()) {
+                        Text(
+                            text = "Release Notes:",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        Text(
+                            text = update.releaseNotes,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 6,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    } else {
+                        Text(
+                            text = "A new update is available. Do you want to download and install it now?",
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = {
+                        showAutoUpdateDialog = false
+                        showDownloadProgress = true
+                        downloadProgress = 0f
+                        coroutineScope.launch {
+                            val apkFile = withContext(Dispatchers.IO) {
+                                UpdateManager.downloadApk(context, update.downloadUrl) { progress ->
+                                    downloadProgress = progress
+                                }
+                            }
+                            showDownloadProgress = false
+                            if (apkFile != null) {
+                                UpdateManager.installApk(context, apkFile)
+                            } else {
+                                Toast.makeText(context, "Failed to download update APK.", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                ) {
+                    Text("Update Now", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showAutoUpdateDialog = false }) {
+                    Text("Later")
+                }
+            }
+        )
+    }
+
+    // Download progress dialog
+    if (showDownloadProgress) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {},
+            properties = androidx.compose.material3.AlertDialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        ) {
+            androidx.compose.material3.Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Downloading Update",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { downloadProgress },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${(downloadProgress * 100).toInt()}%",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
     }
     }
 }
