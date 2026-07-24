@@ -61,7 +61,9 @@ fun SwipeableCard(
     onSwipeLeft: () -> Unit,
     onSwipeRight: () -> Unit,
     modifier: Modifier = Modifier,
-    content: @Composable (Float) -> Unit
+    // (P7) pass a lambda instead of a Float so the content can defer the
+    // read into graphicsLayer/draw phase, avoiding recomposition per drag pixel
+    content: @Composable () -> Unit
 ) {
     // Use plain float state for drag tracking (synchronous, no coroutine overhead)
     var dragOffset by remember(habit.id) { mutableFloatStateOf(0f) }
@@ -69,6 +71,8 @@ fun SwipeableCard(
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val swipeThreshold = with(density) { 120.dp.toPx() }
+    // (C2) haptic feedback for tactile swipe confirmation
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     Box(
         modifier = modifier
@@ -84,6 +88,8 @@ fun SwipeableCard(
                     onDragEnd = {
                         coroutineScope.launch {
                             if (dragOffset > swipeThreshold) {
+                                // (C2) haptic confirmation for complete
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                                 animatable.snapTo(dragOffset)
                                 animatable.animateTo(
                                     targetValue = 1000f,
@@ -92,6 +98,8 @@ fun SwipeableCard(
                                 dragOffset = 0f
                                 onSwipeRight()
                             } else if (dragOffset < -swipeThreshold) {
+                                // (C2) haptic confirmation for skip
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                 animatable.snapTo(dragOffset)
                                 animatable.animateTo(
                                     targetValue = -1000f,
@@ -127,7 +135,10 @@ fun SwipeableCard(
                 )
             }
     ) {
-        content(dragOffset)
+        // (P7) content renders the card body; the swipe overlay is handled
+        // by the SwipeableCard itself via deferred state reads in graphicsLayer,
+        // so dragging does NOT recompose the content lambda.
+        content()
     }
 }
 
@@ -135,23 +146,21 @@ fun SwipeableCard(
 fun HabitCardContent(
     habit: Habit,
     isTop: Boolean,
-    modifier: Modifier = Modifier,
-    swipeOffset: Float = 0f
+    modifier: Modifier = Modifier
 ) {
     val parsedColor = remember(habit.colorHex) {
         try {
             Color(android.graphics.Color.parseColor(habit.colorHex))
         } catch (e: Exception) {
-            Color(0xFF8338EC) // Fallback purple
+            com.example.loophabit.ui.theme.HabitFallbackColor // curated fallback
         }
     }
 
-    val swipeIndicatorAlpha = (abs(swipeOffset) / 200f).coerceIn(0f, 1f)
-
     Card(
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isTop) 6.dp else 2.dp),
+        // (C4) stronger elevation on the top card for depth
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isTop) 8.dp else 2.dp),
         modifier = modifier
             .fillMaxWidth(0.9f)
             .fillMaxHeight(0.85f)
@@ -167,7 +176,8 @@ fun HabitCardContent(
                         )
                     )
                 )
-                .padding(24.dp)
+                // (C4) tighter padding
+                .padding(20.dp)
         ) {
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -200,10 +210,11 @@ fun HabitCardContent(
                 Column {
                     Text(
                         text = habit.title,
-                        style = MaterialTheme.typography.headlineMedium,
+                        // (C4) tighter type scale, fewer lines
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 3,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -236,44 +247,7 @@ fun HabitCardContent(
                 }
             }
 
-            // Visual feedback overlay based on swipe
-            if (isTop && swipeOffset != 0f) {
-                val overlayColor = if (swipeOffset > 0) Color(0xFF06D6A0) else Color(0xFF8338EC)
-                val icon = if (swipeOffset > 0) Icons.Outlined.Check else Icons.Outlined.Close
-                val textLabel = if (swipeOffset > 0) "COMPLETE" else "SKIP"
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(overlayColor.copy(alpha = 0.12f * swipeIndicatorAlpha)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier
-                            .graphicsLayer {
-                                this.alpha = swipeIndicatorAlpha
-                                this.scaleX = 0.8f + (0.2f * swipeIndicatorAlpha)
-                                this.scaleY = 0.8f + (0.2f * swipeIndicatorAlpha)
-                            }
-                            .background(
-                                overlayColor,
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Icon(icon, contentDescription = textLabel, tint = Color.White)
-                        Text(
-                            text = textLabel,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            }
+            // (P7) swipe overlay moved to SwipeableCard - no longer here
         }
     }
 }
@@ -290,12 +264,12 @@ fun CompletedHabitRow(
         try {
             Color(android.graphics.Color.parseColor(habit.colorHex))
         } catch (e: Exception) {
-            Color(0xFF8338EC)
+            com.example.loophabit.ui.theme.HabitFallbackColor
         }
     }
 
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.small,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
         ),

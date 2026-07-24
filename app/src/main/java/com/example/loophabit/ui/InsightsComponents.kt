@@ -101,16 +101,22 @@ fun InsightsDashboard(
     val startOfWeek = today.minusDays((today.dayOfWeek.value - 1).toLong()) // Monday
     val currentWeekDates = (0..6).map { startOfWeek.plusDays(it.toLong()).toString() }
 
-    val totalCompletions = allCompletions.size
+    // (A5) memoized: these were recomputed on every recomposition
+    val totalCompletions = remember(allCompletions) { allCompletions.size }
 
     // Last 30 days overall consistency metric
-    val last30Days = (0 until 30).map { today.minusDays(it.toLong()).toString() }
-    val completionsInLast30 = allCompletions.count { last30Days.contains(it.date) }
-    val maxPossibleCompletions = allHabits.size * 30
-    val overallConsistency = if (maxPossibleCompletions > 0) {
-        (completionsInLast30.toFloat() / maxPossibleCompletions.toFloat() * 100).roundToInt()
-    } else {
-        0
+    val last30Days = remember(today) { (0 until 30).map { today.minusDays(it.toLong()).toString() } }
+    val completionsInLast30 = remember(allCompletions, last30Days) {
+        val set = last30Days.toSet()
+        allCompletions.count { set.contains(it.date) }
+    }
+    val overallConsistency = remember(completionsInLast30, allHabits) {
+        val maxPossibleCompletions = allHabits.size * 30
+        if (maxPossibleCompletions > 0) {
+            (completionsInLast30.toFloat() / maxPossibleCompletions.toFloat() * 100).roundToInt()
+        } else {
+            0
+        }
     }
 
     // Streaks Leaders mapping
@@ -154,12 +160,12 @@ fun InsightsDashboard(
 
     val achievements = remember(totalCompletions, maxBestStreak, overallConsistency, allHabits) {
         listOf(
-            AchievementItem("first_step", "First Step", "Complete 1 habit", Icons.Outlined.CheckCircle, totalCompletions >= 1, "${if (totalCompletions >= 1) 1 else 0}/1", Color(0xFF06D6A0)),
-            AchievementItem("streak_3", "3-Day Streak", "Reach a 3-day streak", Icons.Outlined.LocalFireDepartment, maxBestStreak >= 3, "$maxBestStreak/3", Color(0xFFFF9F1C)),
-            AchievementItem("streak_7", "7-Day Streak", "Reach a 7-day streak", Icons.Outlined.EmojiEvents, maxBestStreak >= 7, "$maxBestStreak/7", Color(0xFFEF476F)),
-            AchievementItem("streak_14", "14-Day Champion", "Reach a 14-day streak", Icons.Outlined.MilitaryTech, maxBestStreak >= 14, "$maxBestStreak/14", Color(0xFF8338EC)),
-            AchievementItem("streak_30", "30-Day Legend", "Reach a 30-day streak", Icons.Outlined.WorkspacePremium, maxBestStreak >= 30, "$maxBestStreak/30", Color(0xFF118AB2)),
-            AchievementItem("consistency_80", "Consistency Champ", "Maintain 80%+ consistency", Icons.Outlined.OfflineBolt, overallConsistency >= 80 && allHabits.isNotEmpty(), "$overallConsistency%/80%", Color(0xFFFFD166))
+            AchievementItem("first_step", "First Step", "Complete 1 habit", Icons.Outlined.CheckCircle, totalCompletions >= 1, "${if (totalCompletions >= 1) 1 else 0}/1", com.example.loophabit.ui.theme.SwipeCompleteColor),
+            AchievementItem("streak_3", "3-Day Streak", "Reach a 3-day streak", Icons.Outlined.LocalFireDepartment, maxBestStreak >= 3, "$maxBestStreak/3", Color(0xFFD97706)),
+            AchievementItem("streak_7", "7-Day Streak", "Reach a 7-day streak", Icons.Outlined.EmojiEvents, maxBestStreak >= 7, "$maxBestStreak/7", Color(0xFFDC2626)),
+            AchievementItem("streak_14", "14-Day Champion", "Reach a 14-day streak", Icons.Outlined.MilitaryTech, maxBestStreak >= 14, "$maxBestStreak/14", com.example.loophabit.ui.theme.Indigo500),
+            AchievementItem("streak_30", "30-Day Legend", "Reach a 30-day streak", Icons.Outlined.WorkspacePremium, maxBestStreak >= 30, "$maxBestStreak/30", Color(0xFF0891B2)),
+            AchievementItem("consistency_80", "Consistency Champ", "Maintain 80%+ consistency", Icons.Outlined.OfflineBolt, overallConsistency >= 80 && allHabits.isNotEmpty(), "$overallConsistency%/80%", Color(0xFFCA8A04))
         )
     }
 
@@ -169,6 +175,36 @@ fun InsightsDashboard(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 10.dp)
     ) {
+        // (C3) friendly empty state when there are no habits yet
+        if (allHabits.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 60.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.EmojiEvents,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.size(56.dp)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "No insights yet",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Add a habit to start tracking your progress",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+            return@Column
+        }
         Text(
             text = "Performance Dashboard",
             style = MaterialTheme.typography.titleLarge,
@@ -392,10 +428,15 @@ fun InsightsDashboard(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(barHeight)
-                                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                    // (C3) rounded caps + gradient fill
+                                    .clip(RoundedCornerShape(8.dp))
                                     .background(
-                                        if (isCurrentDay) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                MaterialTheme.colorScheme.primary,
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                            )
+                                        )
                                     )
                             )
                             Spacer(modifier = Modifier.height(4.dp))
@@ -457,8 +498,16 @@ fun InsightsDashboard(
                                 modifier = Modifier
                                     .width(20.dp)
                                     .height(barHeight)
-                                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                                    .background(MaterialTheme.colorScheme.secondary)
+                                    // (C3) rounded caps + gradient fill
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                MaterialTheme.colorScheme.secondary,
+                                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f)
+                                            )
+                                        )
+                                    )
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -535,7 +584,7 @@ fun InsightsDashboard(
                             try {
                                 Color(android.graphics.Color.parseColor(habit.colorHex))
                             } catch (e: Exception) {
-                                Color(0xFF8338EC)
+                                com.example.loophabit.ui.theme.HabitFallbackColor
                             }
                         }
 
@@ -1066,14 +1115,14 @@ fun MonthlyCalendarTab(
                                     Icon(
                                         imageVector = Icons.Outlined.CheckCircle,
                                         contentDescription = null,
-                                        tint = Color(0xFF06D6A0),
+                                        tint = com.example.loophabit.ui.theme.SwipeCompleteColor,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
                                         text = "Completed",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF06D6A0)
+                                        color = com.example.loophabit.ui.theme.SwipeCompleteColor
                                     )
                                 }
                             }

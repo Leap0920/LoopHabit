@@ -1,6 +1,27 @@
 # LoopHabit
 
-LoopHabit is a modern, premium habit tracking and focus application built for Android using Jetpack Compose, Material Design 3, Room Database, and Supabase integration. It helps you build healthy habits and dedicate uninterrupted time to achieve your goals.
+LoopHabit is a modern, premium habit tracking and focus application. The **primary app is now React Native (Expo)** under [`mobile/`](./mobile), with the original Jetpack Compose Android project kept at the repo root for reference.
+
+It helps you build healthy habits and dedicate uninterrupted time to achieve your goals.
+
+## Quick start (React Native)
+
+```bash
+# from repo root
+npm run dev
+```
+
+Then press `a` (Android emulator/device with Expo Go), `i` (iOS), or scan the QR code.
+
+See [`mobile/README.md`](./mobile/README.md) for the feature port status.
+
+### Legacy native Android
+
+```bash
+npm run android:native:build   # Gradle assembleDebug
+# or
+./gradlew assembleDebug
+```
 
 ## 🚀 Key Features
 

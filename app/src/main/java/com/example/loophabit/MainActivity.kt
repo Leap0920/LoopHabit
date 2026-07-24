@@ -6,9 +6,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.example.loophabit.ui.HabitViewModel
 import com.example.loophabit.ui.HabitViewModelFactory
 import com.example.loophabit.ui.MainScreen
+import com.example.loophabit.ui.theme.LoopHabitTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -33,7 +36,13 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MainScreen(viewModel = viewModel)
+            // Apply theme once at the activity level (A1 perf optimization).
+            // Re-wrapping inside MainScreen on every recomposition was a major cost.
+            val app = (application as LoopHabitApp)
+            val darkModeEnabled by app.preferences.darkModeEnabledFlow.collectAsState(initial = false)
+            LoopHabitTheme(darkTheme = darkModeEnabled) {
+                MainScreen(viewModel = viewModel, darkModeEnabled = darkModeEnabled)
+            }
         }
     }
 

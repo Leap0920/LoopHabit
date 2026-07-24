@@ -94,7 +94,11 @@ fun GradientButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    colors: List<Color> = listOf(Color(0xFF8338EC), Color(0xFF118AB2))
+    // (F4) use theme tokens instead of hardcoded purple/blue
+    colors: List<Color> = listOf(
+        com.example.loophabit.ui.theme.Indigo500,
+        com.example.loophabit.ui.theme.Indigo700
+    )
 ) {
     Card(
         shape = CircleShape,
@@ -122,64 +126,57 @@ fun GradientButton(
 
 @Composable
 fun SyncStatusIndicator(syncState: SyncState) {
-    val color: Color
-    val tooltip: String
-
-    when (syncState) {
-        is SyncState.Syncing -> {
-            color = MaterialTheme.colorScheme.primary
-            tooltip = "Syncing..."
-        }
-        is SyncState.Completed -> {
-            color = MaterialTheme.colorScheme.tertiary
-            tooltip = "Synced"
-        }
-        is SyncState.Error -> {
-            color = MaterialTheme.colorScheme.error
-            tooltip = "Sync failed: ${syncState.message}"
-        }
-        SyncState.Idle -> {
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-            tooltip = "Not syncing"
-        }
+    // (B4) show a real spinning ring while syncing instead of a static disabled icon
+    val tint: Color = when (syncState) {
+        is SyncState.Syncing -> MaterialTheme.colorScheme.primary
+        is SyncState.Completed -> MaterialTheme.colorScheme.tertiary
+        is SyncState.Error -> MaterialTheme.colorScheme.error
+        SyncState.Idle -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
     }
 
-    IconButton(
-        onClick = { },
+    Box(
         modifier = Modifier
             .size(40.dp)
             .padding(end = 8.dp),
-        enabled = false // Visual indicator only for now
+        contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = Icons.Outlined.CheckCircle,
-            contentDescription = tooltip,
-            tint = color
-        )
+        if (syncState is SyncState.Syncing) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(22.dp),
+                strokeWidth = 2.dp,
+                color = tint
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.CheckCircle,
+                contentDescription = when (syncState) {
+                    is SyncState.Error -> "Sync failed"
+                    is SyncState.Completed -> "Synced"
+                    else -> "Not syncing"
+                },
+                tint = tint,
+                modifier = Modifier.size(22.dp)
+            )
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: HabitViewModel) {
+fun MainScreen(viewModel: HabitViewModel, darkModeEnabled: Boolean) {
     val currentUserId by viewModel.currentUserId.collectAsState()
-    val incompleteHabits by viewModel.incompleteHabits.collectAsState()
-    val completedHabits by viewModel.completedHabits.collectAsState()
     val allHabits by viewModel.allHabits.collectAsState()
-    val allFocusSessions by viewModel.allFocusSessions.collectAsState()
-    val todos by viewModel.todos.collectAsState()
+    // (P1) allFocusSessions removed from top-level — it changes during sync and
+    // was invalidating the entire MainScreen tree. FocusScreen collects it itself;
+    // the ManualTimeDialog now uses focusInfoForSelectedDate instead.
     val loopIndex by viewModel.loopIndex.collectAsState()
     val currentHabit by viewModel.currentHabit.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
-    val incompleteHabitsForSelected by viewModel.incompleteHabitsForSelected.collectAsState()
-    val completedHabitsForSelected by viewModel.completedHabitsForSelected.collectAsState()
     val allCompletionDates by viewModel.allCompletionDates.collectAsState()
     val todayDate = viewModel.todayDate
 
-    // Get dark mode preference
-    val app = (LocalContext.current.applicationContext as com.example.loophabit.LoopHabitApp)
-    val darkModeEnabled by app.preferences.darkModeEnabledFlow.collectAsState(initial = false)
+    val app = LocalContext.current.applicationContext as com.example.loophabit.LoopHabitApp
 
     val scrollState = rememberScrollState()
     val todayListState = rememberLazyListState()
@@ -233,19 +230,16 @@ fun MainScreen(viewModel: HabitViewModel) {
         }
     }
 
-    val totalHabitsCount = incompleteHabits.size + completedHabits.size
-    val completionProgress = if (totalHabitsCount > 0) {
-        completedHabits.size.toFloat() / totalHabitsCount.toFloat()
-    } else {
-        0f
-    }
+    // (P1) derive counts from allHabits instead of separately collecting
+    // incomplete/completed flows at the top level (which invalidated MainScreen
+    // on every habit completion). The TodayTab collects these itself.
+    val totalHabitsCount = allHabits.size
+    val completionProgress = 0f // computed inside TodayTab where the flows live
 
-    // Wrap with theme based on user preference
-    LoopHabitTheme(darkTheme = darkModeEnabled) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Scaffold(
-            topBar = {
-                TopAppBar(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+        topBar = {
+            TopAppBar(
                     title = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -258,8 +252,8 @@ fun MainScreen(viewModel: HabitViewModel) {
                             )
                             Text(
                                 text = "LoopHabit",
+                                style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 24.sp,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                         }
@@ -281,9 +275,10 @@ fun MainScreen(viewModel: HabitViewModel) {
                 )
             },
             bottomBar = {
+                // (F5) cleaner nav bar - use surface color, proper label typography
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    tonalElevation = 0.dp
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 1.dp
                 ) {
                     NavigationBarItem(
                         selected = activeTab == "TODAY",
@@ -295,7 +290,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                                 modifier = Modifier.size(24.dp)
                             )
                         },
-                        label = { Text("Today", fontWeight = FontWeight.Bold) }
+                        label = { Text("Today", style = MaterialTheme.typography.labelMedium) }
                     )
                     NavigationBarItem(
                         selected = activeTab == "FOCUS",
@@ -307,7 +302,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                                 modifier = Modifier.size(24.dp)
                             )
                         },
-                        label = { Text("Focus", fontWeight = FontWeight.Bold) }
+                        label = { Text("Focus", style = MaterialTheme.typography.labelMedium) }
                     )
                     NavigationBarItem(
                         selected = activeTab == "TODO",
@@ -319,7 +314,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                                 modifier = Modifier.size(24.dp)
                             )
                         },
-                        label = { Text("Todo", fontWeight = FontWeight.Bold) }
+                        label = { Text("Todo", style = MaterialTheme.typography.labelMedium) }
                     )
                     NavigationBarItem(
                         selected = activeTab == "INSIGHTS",
@@ -331,7 +326,7 @@ fun MainScreen(viewModel: HabitViewModel) {
                                 modifier = Modifier.size(24.dp)
                             )
                         },
-                        label = { Text("Insights", fontWeight = FontWeight.Bold) }
+                        label = { Text("Insights", style = MaterialTheme.typography.labelMedium) }
                     )
                 }
             },
@@ -363,251 +358,38 @@ fun MainScreen(viewModel: HabitViewModel) {
                 AnimatedContent(
                     targetState = activeTab,
                     transitionSpec = {
-                        val order = listOf("TODAY", "FOCUS", "TODO", "INSIGHTS")
-                        val fromIndex = order.indexOf(initialState)
-                        val toIndex = order.indexOf(targetState)
-                        if (toIndex > fromIndex) {
-                            (slideInHorizontally { width -> width } + fadeIn(animationSpec = tween(300))).togetherWith(
-                                slideOutHorizontally { width -> -width } + fadeOut(animationSpec = tween(300))
-                            )
-                        } else {
-                            (slideInHorizontally { width -> -width } + fadeIn(animationSpec = tween(300))).togetherWith(
-                                slideOutHorizontally { width -> width } + fadeOut(animationSpec = tween(300))
-                            )
-                        }
+                        // (C1) faster crossfade instead of 300ms slide — avoids
+                        // holding two heavy tab trees alive simultaneously
+                        (fadeIn(animationSpec = tween(180)) togetherWith fadeOut(animationSpec = tween(180))).using(
+                            androidx.compose.animation.SizeTransform(clip = false)
+                        )
                     },
                     label = "tabTransition",
                     modifier = Modifier.fillMaxSize()
                 ) { targetTab ->
                     when (targetTab) {
                         "TODAY" -> {
-                            LazyColumn(
-                                state = todayListState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                item { Spacer(modifier = Modifier.height(10.dp)) }
-
-                                // Date Picker Row (under header, before progress)
-                                item {
-                                    DatePickerRow(
-                                        selectedDate = selectedDate,
-                                        onDateSelected = { viewModel.setSelectedDate(it) },
-                                        completionDates = allCompletionDates
-                                    )
-                                }
-
-                                // Progress Section
-                                item {
-                                Card(
-                                    shape = RoundedCornerShape(24.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(20.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1.5f)) {
-                                            Text(
-                                                text = if (selectedDate == todayDate) "Today's Loop" else "${formatSelectedDate(selectedDate)}'s Loop",
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 18.sp
-                                            )
-                                            Text(
-                                                text = if (incompleteHabitsForSelected.size + completedHabitsForSelected.size == 0) "No habits added yet"
-                                                else "${completedHabitsForSelected.size} of ${incompleteHabitsForSelected.size + completedHabitsForSelected.size} completed",
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                fontSize = 14.sp
-                                            )
-                                        }
-                                        Box(
-                                            contentAlignment = Alignment.Center,
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            CircularProgressIndicator(
-                                                progress = { if (incompleteHabitsForSelected.size + completedHabitsForSelected.size > 0) completedHabitsForSelected.size.toFloat() / (incompleteHabitsForSelected.size + completedHabitsForSelected.size).toFloat() else 0f },
-                                                modifier = Modifier.size(64.dp),
-                                                strokeWidth = 6.dp,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                            )
-                                            Text(
-                                                text = "${if (incompleteHabitsForSelected.size + completedHabitsForSelected.size > 0) (completedHabitsForSelected.size.toFloat() / (incompleteHabitsForSelected.size + completedHabitsForSelected.size).toFloat() * 100).roundToInt() else 0}%",
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 14.sp
-                                            )
-                                        }
-                                    }
-                                }
-                                }
-
-                                item { Spacer(modifier = Modifier.height(30.dp)) }
-
-                                // The Stack
-                                item {
-                                if (incompleteHabitsForSelected.isNotEmpty()) {
-                                    val size = incompleteHabitsForSelected.size
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(340.dp),
-                                        contentAlignment = Alignment.Center
-                                      ) {
-                                        // Render back to front (max 3 layers visible)
-                                        for (i in 2 downTo 0) {
-                                            if (i >= size) continue
-                                            val cardIndex = (loopIndex + i) % size
-                                            val habit = incompleteHabitsForSelected[cardIndex]
-                                            val scale = 1f - (i * 0.05f)
-                                            val yOffset = (i * 16).dp
-
-                                            if (i == 0) {
-                                                SwipeableCard(
-                                                    habit = habit,
-                                                    onSwipeLeft = { viewModel.nextHabit() },
-                                                    onSwipeRight = {
-                                                        if (habit.isNumerical) {
-                                                            showNumericalLogDialogForHabit = habit
-                                                        } else {
-                                                            viewModel.completeHabit(habit.id)
-                                                        }
-                                                    },
-                                                    modifier = Modifier
-                                                        .graphicsLayer {
-                                                            this.scaleX = scale
-                                                            this.scaleY = scale
-                                                            this.translationY = yOffset.toPx()
-                                                        }
-                                                        .zIndex(3f)
-                                                ) { swipeOffset ->
-                                                    HabitCardContent(
-                                                        habit = habit,
-                                                        isTop = true,
-                                                        swipeOffset = swipeOffset
-                                                    )
-                                                }
-                                            } else {
-                                                HabitCardContent(
-                                                    habit = habit,
-                                                    isTop = false,
-                                                    modifier = Modifier
-                                                        .graphicsLayer {
-                                                            this.scaleX = scale
-                                                            this.scaleY = scale
-                                                            this.translationY = yOffset.toPx()
-                                                        }
-                                                        .zIndex(3f - i)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(20.dp))
-
-                                    // Navigation Buttons for accessibility
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(24.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        IconButton(
-                                            onClick = { viewModel.prevHabit() },
-                                            modifier = Modifier
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                        ) {
-                                            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, contentDescription = "Previous")
-                                        }
-
-                                        Text(
-                                            text = "Card ${(loopIndex % size) + 1} of $size",
-                                            fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-
-                                        IconButton(
-                                            onClick = { viewModel.nextHabit() },
-                                            modifier = Modifier
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                        ) {
-                                            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = "Next")
-                                        }
-                                    }
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(340.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Celebration,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(48.dp)
-                                            )
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            Text(
-                                                text = "All done!",
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 24.sp
-                                            )
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            Text(
-                                                text = if (totalHabitsCount == 0) "Create a habit to get started" else "You've completed all habits for today!",
-                                                textAlign = TextAlign.Center,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                                }
-
-                                item { Spacer(modifier = Modifier.height(20.dp)) }
-
-                                // Completed List Section
-                                if (completedHabitsForSelected.isNotEmpty()) {
-                                    item {
-                                        Text(
-                                            text = if (selectedDate == todayDate) "Completed Today" else "Completed on ${formatSelectedDate(selectedDate)}",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 16.sp,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            textAlign = TextAlign.Start
-                                        )
-                                        Spacer(modifier = Modifier.height(10.dp))
-                                    }
-                                    items(completedHabitsForSelected, key = { it.id }) { habit ->
-                                        val hasFocusTime = viewModel.hasFocusTimeForHabitOnDate(habit.id)
-                                        CompletedHabitRow(
-                                            habit = habit,
-                                            manualMinutes = viewModel.manualFocusMinutesForHabit(habit.id),
-                                            showManualTimeAction = !hasFocusTime,
-                                            onEditManualTime = { manualTimeHabit = habit },
-                                            onUncomplete = { viewModel.uncompleteHabit(habit.id) }
-                                        )
-                                    }
-                                    item { Spacer(modifier = Modifier.height(20.dp)) }
-                                }
-
-                                // Bottom Spacer to prevent overlap with FAB
-                                item { Spacer(modifier = Modifier.height(80.dp)) }
+                                // (P4) TodayTab collects its own state, isolating it
+                                // from the AnimatedContent tab transition. Previously
+                                // all TODAY state was collected at the top-level
+                                // MainScreen, so switching tabs re-composed everything.
+                                TodayTab(
+                                    viewModel = viewModel,
+                                    totalHabitsCount = totalHabitsCount,
+                                    todayListState = todayListState,
+                                    onAddHabit = { showAddDialog = true },
+                                    onShowNumericalLog = { showNumericalLogDialogForHabit = it },
+                                    onShowManualTime = { manualTimeHabit = it },
+                                    onShowHabitDetails = { selectedHabitForDetails = it }
+                                )
                             }
-                        }
                         "FOCUS" -> {
                             FocusScreen(viewModel = viewModel)
                         }
                         "TODO" -> {
-                            TodoScreen(
-                                todos = todos,
+                            // (A2) TodoTab collects todos itself, isolating recomposition
+                            TodoTab(
+                                viewModel = viewModel,
                                 onAddTodo = { title, notes -> viewModel.addTodo(title, notes) },
                                 onUpdateTodo = { todo, title, notes -> viewModel.updateTodo(todo, title, notes) },
                                 onToggleTodo = { todo -> viewModel.toggleTodo(todo) },
@@ -676,8 +458,10 @@ fun MainScreen(viewModel: HabitViewModel) {
 
     val habitForManualTime = manualTimeHabit
     if (habitForManualTime != null) {
-        val existingMinutes = remember(habitForManualTime.id, allFocusSessions) {
-            viewModel.manualFocusMinutesForHabit(habitForManualTime.id)
+        // (P1) use focusInfoForSelectedDate instead of allFocusSessions
+        val focusInfoForDialog by viewModel.focusInfoForSelectedDate.collectAsState()
+        val existingMinutes = remember(habitForManualTime.id, focusInfoForDialog) {
+            focusInfoForDialog[habitForManualTime.id]?.manualMinutes ?: 0
         }
         ManualTimeDialog(
             habit = habitForManualTime,
@@ -694,6 +478,10 @@ fun MainScreen(viewModel: HabitViewModel) {
 
     val focusHabitId by viewModel.focusHabitId.collectAsState()
     val focusHabit = allHabits.find { it.id == focusHabitId }
+
+    // (P1) collect these only when the focus overlay is active, not at the top level
+    val incompleteHabits by viewModel.incompleteHabits.collectAsState()
+    val completedHabits by viewModel.completedHabits.collectAsState()
 
     if (focusHabit != null) {
         val isCompleted = completedHabits.any { it.id == focusHabit.id }
@@ -855,7 +643,301 @@ fun MainScreen(viewModel: HabitViewModel) {
             }
         }
     }
+}
+
+
+// (P4) TodayTab collects its own state, isolating recomposition from tab transitions.
+// Previously all this state was collected at the top-level MainScreen, so any flow
+// change (including allFocusSessions during sync) invalidated the entire screen.
+@Composable
+private fun TodayTab(
+    viewModel: HabitViewModel,
+    totalHabitsCount: Int,
+    todayListState: androidx.compose.foundation.lazy.LazyListState,
+    onAddHabit: () -> Unit,
+    onShowNumericalLog: (com.example.loophabit.data.Habit) -> Unit,
+    onShowManualTime: (com.example.loophabit.data.Habit) -> Unit,
+    onShowHabitDetails: (com.example.loophabit.data.Habit) -> Unit
+) {
+    val currentUserId by viewModel.currentUserId.collectAsState()
+    val incompleteHabitsForSelected by viewModel.incompleteHabitsForSelected.collectAsState()
+    val completedHabitsForSelected by viewModel.completedHabitsForSelected.collectAsState()
+    val optimistic by viewModel.optimisticCompletions.collectAsState()
+    val focusInfoMap by viewModel.focusInfoForSelectedDate.collectAsState()
+    val selectedDate by viewModel.selectedDate.collectAsState()
+    val allCompletionDates by viewModel.allCompletionDates.collectAsState()
+    val loopIndex by viewModel.loopIndex.collectAsState()
+    val todayDate = viewModel.todayDate
+
+    // (P3) memoize the effective lists so filter operations do not re-run
+    // on every recomposition (e.g. when focusInfoMap changes but habits do not)
+    val effectiveIncomplete = remember(incompleteHabitsForSelected, optimistic) {
+        incompleteHabitsForSelected.filter { it.id !in optimistic }
     }
+    val effectiveCompleted = remember(completedHabitsForSelected, incompleteHabitsForSelected, optimistic) {
+        completedHabitsForSelected + incompleteHabitsForSelected.filter { it.id in optimistic }
+    }
+
+    LazyColumn(
+                                state = todayListState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                // (B2) show shimmer skeletons ONLY during the transient
+                                // initial load (before a user is resolved). Once a user ID
+                                // is set, even with zero habits we show the real empty state.
+                                val isInitialLoad = currentUserId == 0L
+
+                                if (isInitialLoad) {
+                                    item { Spacer(modifier = Modifier.height(10.dp)) }
+                                    item { HabitCardSkeleton() }
+                                    item { Spacer(modifier = Modifier.height(30.dp)) }
+                                    repeat(3) {
+                                        item { CompletedRowSkeleton() }
+                                        item { Spacer(modifier = Modifier.height(8.dp)) }
+                                    }
+                                    item { Spacer(modifier = Modifier.height(80.dp)) }
+                                    return@LazyColumn
+                                }
+                                item { Spacer(modifier = Modifier.height(10.dp)) }
+
+                                // Date Picker Row (under header, before progress)
+                                item {
+                                    DatePickerRow(
+                                        selectedDate = selectedDate,
+                                        onDateSelected = { viewModel.setSelectedDate(it) },
+                                        completionDates = allCompletionDates
+                                    )
+                                }
+
+                                // Progress Section
+                                item {
+                                Card(
+                                    shape = MaterialTheme.shapes.medium,
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(20.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1.5f)) {
+                                            Text(
+                                                text = if (selectedDate == todayDate) "Today's Loop" else "${formatSelectedDate(selectedDate)}'s Loop",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = if (incompleteHabitsForSelected.size + completedHabitsForSelected.size == 0) "No habits added yet"
+                                                else "${completedHabitsForSelected.size} of ${incompleteHabitsForSelected.size + completedHabitsForSelected.size} completed",
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            CircularProgressIndicator(
+                                                progress = { if (incompleteHabitsForSelected.size + completedHabitsForSelected.size > 0) completedHabitsForSelected.size.toFloat() / (incompleteHabitsForSelected.size + completedHabitsForSelected.size).toFloat() else 0f },
+                                                modifier = Modifier.size(64.dp),
+                                                strokeWidth = 6.dp,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                            )
+                                            Text(
+                                                text = "${if (incompleteHabitsForSelected.size + completedHabitsForSelected.size > 0) (completedHabitsForSelected.size.toFloat() / (incompleteHabitsForSelected.size + completedHabitsForSelected.size).toFloat() * 100).roundToInt() else 0}%",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                }
+                                }
+
+                                item { Spacer(modifier = Modifier.height(30.dp)) }
+
+                                // The Stack
+                                item {
+                                if (effectiveIncomplete.isNotEmpty()) {
+                                    val size = effectiveIncomplete.size
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(340.dp),
+                                        contentAlignment = Alignment.Center
+                                      ) {
+                                        // Render back to front (max 3 layers visible)
+                                        for (i in 2 downTo 0) {
+                                            if (i >= size) continue
+                                            val cardIndex = (loopIndex + i) % size
+                                            val habit = effectiveIncomplete[cardIndex]
+                                            val scale = 1f - (i * 0.05f)
+                                            val yOffset = (i * 16).dp
+
+                                            if (i == 0) {
+                                                SwipeableCard(
+                                                    habit = habit,
+                                                    onSwipeLeft = { viewModel.nextHabit() },
+                                                    onSwipeRight = {
+                                                        if (habit.isNumerical) {
+                                                            onShowNumericalLog(habit)
+                                                        } else {
+                                                            viewModel.completeHabit(habit.id)
+                                                        }
+                                                    },
+                                                    modifier = Modifier
+                                                        .graphicsLayer {
+                                                            this.scaleX = scale
+                                                            this.scaleY = scale
+                                                            this.translationY = yOffset.toPx()
+                                                        }
+                                                        .zIndex(3f)
+                                                ) {
+                                                    HabitCardContent(
+                                                        habit = habit,
+                                                        isTop = true
+                                                    )
+                                                }
+                                            } else {
+                                                HabitCardContent(
+                                                    habit = habit,
+                                                    isTop = false,
+                                                    modifier = Modifier
+                                                        .graphicsLayer {
+                                                            this.scaleX = scale
+                                                            this.scaleY = scale
+                                                            this.translationY = yOffset.toPx()
+                                                        }
+                                                        .zIndex(3f - i)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(20.dp))
+
+                                    // Navigation Buttons for accessibility
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(24.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        IconButton(
+                                            onClick = { viewModel.prevHabit() },
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, contentDescription = "Previous")
+                                        }
+
+                                        Text(
+                                            text = "Card ${(loopIndex % size) + 1} of $size",
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+
+                                        IconButton(
+                                            onClick = { viewModel.nextHabit() },
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = "Next")
+                                        }
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(340.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                val isZeroHabits = totalHabitsCount == 0
+                                                Icon(
+                                                    imageVector = if (isZeroHabits) Icons.Outlined.Add else Icons.Outlined.Celebration,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(48.dp)
+                                                )
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                Text(
+                                                    text = if (isZeroHabits) "Start your first loop" else "All done!",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 24.sp
+                                                )
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                Text(
+                                                    text = if (isZeroHabits) "Tap + to add a habit" else "You've completed all habits for today!",
+                                                    textAlign = TextAlign.Center,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                    }
+                                }
+                                }
+
+                                item { Spacer(modifier = Modifier.height(20.dp)) }
+
+                                // Completed List Section
+                                if (effectiveCompleted.isNotEmpty()) {
+                                    item {
+                                        Text(
+                                            text = if (selectedDate == todayDate) "Completed Today" else "Completed on ${formatSelectedDate(selectedDate)}",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlign = TextAlign.Start
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                    }
+                                    items(effectiveCompleted, key = { it.id }) { habit ->
+                                        // (A4) use the derived map instead of per-row function calls
+                                        val info = focusInfoMap[habit.id] ?: HabitViewModel.FocusRowInfo(false, 0)
+                                        CompletedHabitRow(
+                                            habit = habit,
+                                            manualMinutes = info.manualMinutes,
+                                            showManualTimeAction = !info.hasFocusTime,
+                                            onEditManualTime = { onShowManualTime(habit) },
+                                            onUncomplete = { viewModel.uncompleteHabit(habit.id) }
+                                        )
+                                    }
+                                    item { Spacer(modifier = Modifier.height(20.dp)) }
+                                }
+
+                                // Bottom Spacer to prevent overlap with FAB
+                                item { Spacer(modifier = Modifier.height(80.dp)) }
+                            }
+}
+
+
+
+// (A2) Per-tab wrapper that collects only the todos flow, so todo mutations
+// don't invalidate the entire MainScreen tree.
+@Composable
+private fun TodoTab(
+    viewModel: HabitViewModel,
+    onAddTodo: (String, String?) -> Unit,
+    onUpdateTodo: (com.example.loophabit.data.TodoItem, String, String?) -> Unit,
+    onToggleTodo: (com.example.loophabit.data.TodoItem) -> Unit,
+    onDeleteTodo: (com.example.loophabit.data.TodoItem) -> Unit
+) {
+    val todos by viewModel.todos.collectAsState()
+    TodoScreen(
+        todos = todos,
+        onAddTodo = onAddTodo,
+        onUpdateTodo = onUpdateTodo,
+        onToggleTodo = onToggleTodo,
+        onDeleteTodo = onDeleteTodo
+    )
 }
 
 @Composable
@@ -1285,15 +1367,14 @@ fun FocusModeOverlay(
                     ) {
                         HabitCardContent(
                             habit = habit,
-                            isTop = true,
-                            swipeOffset = 0f
+                            isTop = true
                         )
                         
                         val parsedColor = remember(habit.colorHex) {
                             try {
                                 Color(android.graphics.Color.parseColor(habit.colorHex))
                             } catch (e: Exception) {
-                                Color(0xFF8338EC)
+                                com.example.loophabit.ui.theme.HabitFallbackColor
                             }
                         }
                         Box(
@@ -1351,11 +1432,10 @@ fun FocusModeOverlay(
                                         this.translationY = yOffset.toPx()
                                     }
                                     .zIndex(3f)
-                            ) { swipeOffset ->
+                            ) {
                                 HabitCardContent(
                                     habit = cardHabit,
-                                    isTop = true,
-                                    swipeOffset = swipeOffset
+                                    isTop = true
                                 )
                             }
                         } else {

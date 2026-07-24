@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -59,23 +60,24 @@ class HabitViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
+        // Self-terminating: only runs until the first non-zero userId is confirmed
+        // (A6 perf: was a forever-running `collect` touching preferences on every emission)
         viewModelScope.launch {
-            repository.currentUserIdFlow.collect { userId ->
-                if (userId == 0L) {
-                    val defaultUser = repository.getUserByUsername("local_user")
-                    if (defaultUser == null) {
-                        val newUser = User(
-                            username = "local_user",
-                            email = "local@loophabit.com",
-                            password = "local_password",
-                            securityQuestion = "Local?",
-                            securityAnswer = "Yes"
-                        )
-                        val insertedId = repository.registerUser(newUser)
-                        repository.setCurrentUserId(insertedId)
-                    } else {
-                        repository.setCurrentUserId(defaultUser.id)
-                    }
+            val userId = repository.currentUserIdFlow.first()
+            if (userId == 0L) {
+                val defaultUser = repository.getUserByUsername("local_user")
+                if (defaultUser == null) {
+                    val newUser = User(
+                        username = "local_user",
+                        email = "local@loophabit.com",
+                        password = "local_password",
+                        securityQuestion = "Local?",
+                        securityAnswer = "Yes"
+                    )
+                    val insertedId = repository.registerUser(newUser)
+                    repository.setCurrentUserId(insertedId)
+                } else {
+                    repository.setCurrentUserId(defaultUser.id)
                 }
             }
         }
@@ -230,8 +232,7 @@ class HabitViewModel(
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     onSuccess()
                 }
-                updateWidget()
-                triggerSync()
+                scheduleRefresh()
             } catch (e: Exception) {
                 e.printStackTrace()
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -250,7 +251,7 @@ class HabitViewModel(
                 repository.setLoopIndex(0)
                 repository.setAutoBackupInterval(0)
                 com.example.loophabit.data.sync.BackupWorker.cancelAutoBackup(applicationContext)
-                updateWidget()
+                scheduleRefresh()
                 onSuccess()
             }
         }
@@ -313,6 +314,27 @@ class HabitViewModel(
         .map { it.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
+    // (A4) Derived map of habitId -> focus info for the selected date.
+    // Previously, the TODAY list called manualFocusMinutesForHabit() and
+    // hasFocusTimeForHabitOnDate() per row on EVERY recomposition — each call
+    // scanned allFocusSessions and built a new SimpleDateFormat. This computes
+    // the whole map once per emission.
+    data class FocusRowInfo(val hasFocusTime: Boolean, val manualMinutes: Int)
+
+    val focusInfoForSelectedDate: StateFlow<Map<Long, FocusRowInfo>> =
+        combine(allFocusSessions, _selectedDate) { sessions, date ->
+            val manualDetails = "Manual time • $date"
+            val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val map = mutableMapOf<Long, FocusRowInfo>()
+            sessions.groupBy { it.habitId }.forEach { (habitId, list) ->
+                if (habitId == null) return@forEach
+                val manual = list.firstOrNull { it.details == manualDetails }
+                val hasTime = list.any { it.details == manualDetails || formatter.format(Date(it.timestamp)) == date }
+                map[habitId] = FocusRowInfo(hasTime, (manual?.durationSeconds ?: 0) / 60)
+            }
+            map
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     val loopIndex: StateFlow<Int> = repository.loopIndexFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
@@ -332,6 +354,12 @@ class HabitViewModel(
     private val _focusHabitId = MutableStateFlow<Long?>(null)
     val focusHabitId = _focusHabitId.asStateFlow()
 
+    // (B3) optimistic UI state for instant feedback
+    private val _optimisticCompletions = MutableStateFlow<Set<Long>>(emptySet())
+    val optimisticCompletions = _optimisticCompletions.asStateFlow()
+    private val _optimisticTodoToggles = MutableStateFlow<Set<Long>>(emptySet())
+    val optimisticTodoToggles = _optimisticTodoToggles.asStateFlow()
+
     fun setFocusHabitId(id: Long?) {
         _focusHabitId.value = id
     }
@@ -345,14 +373,33 @@ class HabitViewModel(
         }
     }
 
-    private fun updateWidget() {
+    // (A3) Coalescing refresh: collapses a burst of triggerSync()+updateWidget()
+    // calls into ONE network sync + ONE widget re-render. Previously, swiping
+    // through 5 habits fired 5 full push+pull syncs and 5 Glance re-renders.
+    private val refreshChannel = kotlinx.coroutines.channels.Channel<Unit>(capacity = kotlinx.coroutines.channels.Channel.CONFLATED)
+    private var lastSyncTime = 0L
+    private val minSyncIntervalMs = 2000L
+    private val coalesceWindowMs = 500L
+
+    init {
         viewModelScope.launch {
-            try {
-                com.example.loophabit.widget.HabitWidget().updateAll(applicationContext)
-            } catch (e: Exception) {
-                e.printStackTrace()
+            refreshChannel.consumeAsFlow().collect {
+                kotlinx.coroutines.delay(coalesceWindowMs)
+                // Coalesce: drain any requests that arrived during the delay window
+                while (refreshChannel.tryReceive().isSuccess) { /* drain */ }
+                val now = System.currentTimeMillis()
+                if (now - lastSyncTime > minSyncIntervalMs) {
+                    lastSyncTime = now
+                    try { syncManager.fullSync() } catch (e: Exception) { e.printStackTrace() }
+                }
+                try { com.example.loophabit.widget.HabitWidget().updateAll(applicationContext) } catch (e: Exception) { e.printStackTrace() }
             }
         }
+    }
+
+    /** Schedule a debounced sync + widget refresh. Safe to call rapidly. */
+    private fun scheduleRefresh() {
+        refreshChannel.trySend(Unit)
     }
 
     fun addHabit(
@@ -378,8 +425,7 @@ class HabitViewModel(
                     numericalUnit = numericalUnit,
                     daysOfWeekPattern = daysOfWeekPattern
                 )
-                triggerSync()
-                updateWidget()
+                scheduleRefresh()
             }
         }
     }
@@ -387,18 +433,23 @@ class HabitViewModel(
     fun deleteHabit(habit: Habit) {
         viewModelScope.launch {
             repository.deleteHabit(habit, todayDate)
-            triggerSync()
-            updateWidget()
+            scheduleRefresh()
         }
     }
 
     fun completeHabit(habitId: Long) {
+        // (B3) optimistic: reflect completion immediately in the UI
+        _optimisticCompletions.value = _optimisticCompletions.value + habitId
         viewModelScope.launch {
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.completeHabit(userId, habitId, _selectedDate.value)
-                triggerSync()
-                updateWidget()
+                // let Room Flow re-emit and move the habit to completed, then clear optimistic
+                kotlinx.coroutines.delay(300)
+                _optimisticCompletions.value = _optimisticCompletions.value - habitId
+                scheduleRefresh()
+            } else {
+                _optimisticCompletions.value = _optimisticCompletions.value - habitId
             }
         }
     }
@@ -408,8 +459,7 @@ class HabitViewModel(
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.logFocusSession(userId, habitId, durationSeconds, details)
-                triggerSync()
-                updateWidget()
+                scheduleRefresh()
             }
         }
     }
@@ -419,7 +469,7 @@ class HabitViewModel(
             val userId = currentUserId.value
             if (userId != 0L && title.isNotBlank()) {
                 repository.addTodo(userId, title, notes)
-                updateWidget()
+                scheduleRefresh()
             }
         }
     }
@@ -456,7 +506,7 @@ class HabitViewModel(
                     details = manualFocusDetailsForDate(date),
                     timestamp = manualFocusTimestamp(date, startHour, startMinute)
                 )
-                updateWidget()
+                scheduleRefresh()
             }
         }
     }
@@ -465,22 +515,26 @@ class HabitViewModel(
         viewModelScope.launch {
             if (title.isNotBlank()) {
                 repository.updateTodo(todo, title, notes)
-                updateWidget()
+                scheduleRefresh()
             }
         }
     }
 
     fun toggleTodo(todo: TodoItem) {
+        // (B3) optimistic toggle for instant feedback
+        _optimisticTodoToggles.value = _optimisticTodoToggles.value + todo.id
         viewModelScope.launch {
             repository.toggleTodo(todo)
-            updateWidget()
+            kotlinx.coroutines.delay(300)
+            _optimisticTodoToggles.value = _optimisticTodoToggles.value - todo.id
+            scheduleRefresh()
         }
     }
 
     fun deleteTodo(todo: TodoItem) {
         viewModelScope.launch {
             repository.deleteTodo(todo)
-            updateWidget()
+            scheduleRefresh()
         }
     }
 
@@ -489,8 +543,7 @@ class HabitViewModel(
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.uncompleteHabit(userId, habitId, _selectedDate.value)
-                triggerSync()
-                updateWidget()
+                scheduleRefresh()
             }
         }
     }
@@ -500,8 +553,7 @@ class HabitViewModel(
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.cycleIndex(userId, 1, todayDate)
-                triggerSync()
-                updateWidget()
+                scheduleRefresh()
             }
         }
     }
@@ -511,8 +563,7 @@ class HabitViewModel(
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.cycleIndex(userId, -1, todayDate)
-                triggerSync()
-                updateWidget()
+                scheduleRefresh()
             }
         }
     }
@@ -520,15 +571,7 @@ class HabitViewModel(
     fun setIndex(index: Int) {
         viewModelScope.launch {
             repository.setLoopIndex(index)
-            triggerSync()
-            updateWidget()
-        }
-    }
-
-    // Trigger background sync after data changes
-    private fun triggerSync() {
-        viewModelScope.launch {
-            syncManager.fullSync()
+            scheduleRefresh()
         }
     }
 
@@ -550,7 +593,7 @@ class HabitViewModel(
             } else {
                 repository.setCurrentUserId(user.id)
                 onSuccess()
-                triggerSync()
+                scheduleRefresh()
             }
         }
     }
@@ -595,7 +638,7 @@ class HabitViewModel(
             if (insertedId > 0) {
                 repository.setCurrentUserId(insertedId)
                 onSuccess()
-                triggerSync()
+                scheduleRefresh()
             } else {
                 onError("Registration failed. Please try again.")
             }
@@ -652,7 +695,7 @@ class HabitViewModel(
         viewModelScope.launch {
             repository.setCurrentUserId(0L)
             repository.setLoopIndex(0)
-            triggerSync()
+            scheduleRefresh()
         }
     }
 
@@ -685,8 +728,7 @@ class HabitViewModel(
             val userId = currentUserId.value
             if (userId != 0L) {
                 repository.completeHabitWithNote(userId, habitId, todayDate, notes, value)
-                triggerSync()
-                updateWidget()
+                scheduleRefresh()
             }
         }
     }

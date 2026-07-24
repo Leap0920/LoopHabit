@@ -40,3 +40,18 @@ desktop.ini
 %USERPROFILE%/
 .openclaude/
 *.log
+
+# React Native / Expo (mobile/)
+node_modules/
+.expo/
+.expo-export-test/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.orig.*
+npm-debug.*
+yarn-debug.*
+yarn-error.*

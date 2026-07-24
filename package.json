@@ -1,0 +1,14 @@
+{
+  "name": "loophabit",
+  "private": true,
+  "description": "LoopHabit — React Native (Expo) app with legacy Android Gradle project preserved",
+  "scripts": {
+    "dev": "npm --prefix mobile run web",
+    "start": "npm --prefix mobile run start",
+    "android": "npm --prefix mobile run android",
+    "ios": "npm --prefix mobile run ios",
+    "web": "npm --prefix mobile run web",
+    "android:native": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1",
+    "android:native:build": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -BuildOnly"
+  }
+}

@@ -196,9 +196,9 @@ fun FocusScreen(viewModel: HabitViewModel) {
 
     val parsedColor = remember(selectedHabit?.colorHex) {
         try {
-            Color(android.graphics.Color.parseColor(selectedHabit?.colorHex ?: "#8338EC"))
+            Color(android.graphics.Color.parseColor(selectedHabit?.colorHex ?: "#7C3AED"))
         } catch (e: Exception) {
-            Color(0xFF8338EC)
+            com.example.loophabit.ui.theme.HabitFallbackColor
         }
     }
 
@@ -691,7 +691,7 @@ fun FocusScreen(viewModel: HabitViewModel) {
                                         try {
                                             Color(android.graphics.Color.parseColor(habit.colorHex))
                                         } catch (e: Exception) {
-                                            Color(0xFF8338EC)
+                                            com.example.loophabit.ui.theme.HabitFallbackColor
                                         }
                                     }
                                     DropdownMenuItem(

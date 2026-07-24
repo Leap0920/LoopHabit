@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "LoopHabit",
+    "slug": "loophabit",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAFAF9"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.loophabit"
+    },
+    "android": {
+      "package": "com.example.loophabit",
+      "adaptiveIcon": {
+        "backgroundColor": "#EDE9FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "name": "LoopHabit",
+      "shortName": "LoopHabit",
+      "lang": "en",
+      "themeColor": "#6D28D9",
+      "backgroundColor": "#FAFAF9"
+    },
+    "plugins": [
+      "expo-sqlite"
+    ]
+  }
+}
